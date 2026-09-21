@@ -16,7 +16,7 @@ type Form = {
   opponent: string;
   competitionId: string; // "" | id | "__new"
   newCompetition: string;
-  isHome: "home" | "away";
+  isHome: "none" | "home" | "away";
   round: string;
   venueName: string;
   venueAddress: string;
@@ -49,7 +49,7 @@ function fromEvent(e: EventDTO, tz: string): Form {
     opponent: e.opponent ?? "",
     competitionId: e.competitionId ? String(e.competitionId) : "",
     newCompetition: "",
-    isHome: e.isHome === false ? "away" : "home",
+    isHome: e.isHome == null ? "none" : e.isHome ? "home" : "away",
     round: e.round ?? "",
     venueName: e.venueName ?? "",
     venueAddress: e.venueAddress ?? "",
@@ -60,21 +60,20 @@ function fromEvent(e: EventDTO, tz: string): Form {
   };
 }
 
-/** Дефолти для нової події: ліга з останньої гри, зал з останньої домашньої. */
+/** Дефолти для нової події: ліга й зал з останньої доданої гри. */
 function defaults(all: EventDTO[], tz: string, chatBound: boolean): Form {
   const lastGame = all.filter((e) => e.type === "game").sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  const lastHome = all.find((e) => e.isHome && e.venueName);
   return {
     type: "game",
     startsAtLocal: defaultNewEventInput(tz),
     opponent: "",
     competitionId: lastGame?.competitionId ? String(lastGame.competitionId) : "",
     newCompetition: "",
-    isHome: "home",
+    isHome: "none",
     round: "",
-    venueName: lastHome?.venueName ?? "",
-    venueAddress: lastHome?.venueAddress ?? "",
-    venueMapUrl: lastHome?.venueMapUrl ?? "",
+    venueName: lastGame?.venueName ?? "",
+    venueAddress: lastGame?.venueAddress ?? "",
+    venueMapUrl: lastGame?.venueMapUrl ?? "",
     kit: "",
     note: "",
     announceNow: chatBound,
@@ -94,7 +93,7 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
   const [f, setForm] = useState<Form>(() =>
     event ? fromEvent(event, tz) : defaults(allEvents, tz, me.settings.chatBound),
   );
-  const [more, setMore] = useState(() => !!(event?.venueMapUrl || event?.kit || event?.note));
+  const [more, setMore] = useState(() => !!(event?.venueMapUrl || event?.kit || event?.note || event?.isHome != null));
   const [saving, setSaving] = useState(false);
 
   // Підказки з попередніх подій: суперники та зали з адресами.
@@ -151,7 +150,7 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
         startsAtLocal: f.startsAtLocal,
         opponent: isGame ? f.opponent : null,
         competitionId: isGame ? competitionId : null,
-        isHome: isGame ? f.isHome === "home" : null,
+        isHome: isGame && f.isHome !== "none" ? f.isHome === "home" : null,
         round: isGame ? f.round : null,
         venueName: f.venueName,
         venueAddress: f.venueAddress,
@@ -239,21 +238,9 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
               )}
             </Field>
 
-            <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-              <Field label="Де граємо">
-                <Segmented
-                  value={f.isHome}
-                  onChange={(v) => set("isHome", v)}
-                  options={[
-                    { value: "home", label: "Дома" },
-                    { value: "away", label: "Виїзд" },
-                  ]}
-                />
-              </Field>
-              <Field label="Тур">
-                <Input value={f.round} onChange={(e) => set("round", e.target.value)} placeholder="3 тур" className="w-24" />
-              </Field>
-            </div>
+            <Field label="Тур або етап">
+              <Input value={f.round} onChange={(e) => set("round", e.target.value)} placeholder="3 тур" />
+            </Field>
           </>
         )}
 
@@ -278,7 +265,7 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
 
         {!more ? (
           <button type="button" onClick={() => setMore(true)} className="text-[15px] font-medium text-court">
-            Більше: мапа, форма, нотатка
+            Більше: мапа, форма, нотатка, дома чи виїзд
           </button>
         ) : (
           <>
@@ -297,6 +284,19 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
             <Field label="Нотатка">
               <Textarea value={f.note} onChange={(e) => set("note", e.target.value)} placeholder="Збір за 40 хв до початку" />
             </Field>
+            {isGame && (
+              <Field label="Дома чи виїзд" hint="Якщо всі грають на нейтральному майданчику — залиште «Не вказано».">
+                <Segmented
+                  value={f.isHome}
+                  onChange={(v) => set("isHome", v)}
+                  options={[
+                    { value: "none", label: "Не вказано" },
+                    { value: "home", label: "Дома" },
+                    { value: "away", label: "Виїзд" },
+                  ]}
+                />
+              </Field>
+            )}
           </>
         )}
 
