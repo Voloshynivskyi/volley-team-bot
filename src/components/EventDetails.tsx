@@ -8,7 +8,8 @@ import { fmtDayLong, fmtTime } from "@/lib/time";
 import { ucFirst } from "@/lib/text";
 import { useApp } from "./context";
 import EventForm from "./EventForm";
-import { Rsvp } from "./Rsvp";
+import { isMine, Rsvp } from "./Rsvp";
+import RosterAttendance from "./RosterAttendance";
 import { Button, errorText, Input, Sheet, Spinner, useToast } from "./ui";
 
 export default function EventDetails({ id, onClose }: { id: number | null; onClose: () => void }) {
@@ -95,9 +96,11 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
           {e.status === "scheduled" && (
             <div className="rounded-2xl bg-surface p-4">
               <Rsvp event={e} showCounts={false} />
-              <AttendanceLists event={e} myId={me.user.id} />
+              <AttendanceLists event={e} myId={me.user.id} myPlayerId={me.player?.id ?? null} />
             </div>
           )}
+
+          {isAdmin && e.status === "scheduled" && <RosterAttendance event={e} />}
 
           {isAdmin && (
             <div className="space-y-2">
@@ -207,7 +210,15 @@ function InfoList({ event: e }: { event: EventDTO }) {
   );
 }
 
-function AttendanceLists({ event: e, myId }: { event: EventDTO; myId: number }) {
+function AttendanceLists({
+  event: e,
+  myId,
+  myPlayerId,
+}: {
+  event: EventDTO;
+  myId: number;
+  myPlayerId: number | null;
+}) {
   const groups = [
     { key: "going", title: "Ідуть", cls: "text-going" },
     { key: "maybe", title: "Можливо", cls: "text-maybe" },
@@ -227,9 +238,9 @@ function AttendanceLists({ event: e, myId }: { event: EventDTO; myId: number }) 
             </p>
             <p className="mt-0.5 text-[15px] leading-relaxed">
               {list.map((a, i) => (
-                <span key={a.telegramUserId}>
+                <span key={a.id}>
                   {i > 0 && ", "}
-                  <span className={a.telegramUserId === myId ? "font-medium" : ""}>{a.displayName}</span>
+                  <span className={isMine(a, myId, myPlayerId) ? "font-medium" : ""}>{a.displayName}</span>
                 </span>
               ))}
             </p>

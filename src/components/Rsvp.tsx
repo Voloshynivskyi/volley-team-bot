@@ -9,20 +9,24 @@ import { RSVP } from "@/lib/positions";
 import { useApp } from "./context";
 import { errorText, Segmented, useToast } from "./ui";
 
-function applyLocal(list: AttendanceDTO[], userId: number, status: RsvpStatus, displayName: string): AttendanceDTO[] {
-  const existing = list.find((a) => a.telegramUserId === userId);
-  if (existing) return list.map((a) => (a.telegramUserId === userId ? { ...a, status } : a));
+/** Мій запис: або я натискав сам (telegram id), або адмін відмітив мене як гравця (player id). */
+export function isMine(a: AttendanceDTO, userId: number, playerId: number | null | undefined) {
+  return a.telegramUserId === userId || (playerId != null && a.playerId === playerId);
+}
+
+function applyLocal(
+  list: AttendanceDTO[],
+  userId: number,
+  playerId: number | null,
+  status: RsvpStatus,
+  displayName: string,
+): AttendanceDTO[] {
+  if (list.some((a) => isMine(a, userId, playerId))) {
+    return list.map((a) => (isMine(a, userId, playerId) ? { ...a, status } : a));
+  }
   return [
     ...list,
-    {
-      id: -1,
-      eventId: -1,
-      telegramUserId: userId,
-      displayName,
-      playerId: null,
-      status,
-      updatedAt: new Date().toISOString(),
-    },
+    { id: -1, eventId: -1, telegramUserId: userId, displayName, playerId, status, updatedAt: new Date().toISOString() },
   ];
 }
 
@@ -32,14 +36,15 @@ export function Rsvp({ event, showCounts = true }: { event: EventDTO; showCounts
   const { mutate } = useSWRConfig();
   const [pending, setPending] = useState(false);
 
-  const mine = event.attendance.find((a) => a.telegramUserId === me.user.id)?.status ?? null;
+  const myPlayerId = me.player?.id ?? null;
+  const mine = event.attendance.find((a) => isMine(a, me.user.id, myPlayerId))?.status ?? null;
   const myName = me.player?.fullName ?? [me.user.first_name, me.user.last_name].filter(Boolean).join(" ");
 
   async function choose(status: RsvpStatus) {
     if (status === mine || pending) return;
     haptic("light");
     setPending(true);
-    const patch = (e: EventDTO) => ({ ...e, attendance: applyLocal(e.attendance, me.user.id, status, myName) });
+    const patch = (e: EventDTO) => ({ ...e, attendance: applyLocal(e.attendance, me.user.id, myPlayerId, status, myName) });
     // Оптимістично — щоб кнопка відгукувалась одразу, ще до відповіді сервера.
     mutate(EVENTS_UPCOMING_KEY, (list?: EventDTO[]) => list?.map((e) => (e.id === event.id ? patch(e) : e)), {
       revalidate: false,
