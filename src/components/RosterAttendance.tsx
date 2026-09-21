@@ -85,10 +85,10 @@ export default function RosterAttendance({ event }: { event: EventDTO }) {
         players?.map((p) => {
           const current = statusOf(p);
           return (
-            <div key={p.id} className="flex items-center gap-3 border-t border-sep px-4 py-2.5">
-              <div className="numeral w-8 shrink-0 text-center text-[22px]">{p.number ?? "–"}</div>
+            <div key={p.id} className="flex items-center gap-2.5 border-t border-sep px-4 py-2.5">
+              <div className="numeral w-7 shrink-0 text-center text-[22px]">{p.number ?? "–"}</div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-medium">{p.fullName}</p>
+                <p className="text-[15px] font-medium leading-tight [overflow-wrap:anywhere]">{p.fullName}</p>
                 <p className="text-[12px] text-hint">
                   {[positionShort(p.position), p.status === "injured" ? "травма" : p.status === "reserve" ? "резерв" : null]
                     .filter(Boolean)
@@ -103,7 +103,7 @@ export default function RosterAttendance({ event }: { event: EventDTO }) {
                     onClick={() => set(p, r.value)}
                     aria-label={`${p.fullName}: ${r.label}`}
                     aria-pressed={current === r.value}
-                    className={`flex h-10 w-10 items-center justify-center rounded-lg text-[17px] transition-colors ${
+                    className={`flex h-10 w-9 items-center justify-center rounded-lg text-[16px] transition-colors ${
                       current === r.value ? ACTIVE[r.value] : "bg-field border border-sep active:bg-court-tint"
                     }`}
                   >
