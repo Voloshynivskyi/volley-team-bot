@@ -85,20 +85,34 @@ export function Field({
   );
 }
 
+/** Поле займає всю ширину, якщо викликач не задав свою (w-20, w-28…). */
+function widthOf(className?: string) {
+  return /(^|s)w-/.test(className ?? "") ? "" : "w-full";
+}
+
 const fieldClass =
-  "w-full min-h-11 rounded-xl bg-field px-3.5 py-2.5 text-[16px] text-ink placeholder:text-hint/70 border border-sep focus:border-court focus:outline-none";
+  "min-w-0 min-h-11 rounded-xl bg-field px-3.5 py-2.5 text-[16px] text-ink placeholder:text-hint/70 border border-sep focus:border-court focus:outline-none";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${fieldClass} ${props.className ?? ""}`} />;
+  return <input {...props} className={`${fieldClass} ${widthOf(props.className)} ${props.className ?? ""}`} />;
 }
 
 export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea rows={2} {...props} className={`${fieldClass} resize-none ${props.className ?? ""}`} />;
+  return (
+    <textarea
+      rows={2}
+      {...props}
+      className={`${fieldClass} ${widthOf(props.className)} resize-none ${props.className ?? ""}`}
+    />
+  );
 }
 
 export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select {...props} className={`${fieldClass} appearance-none pr-9 ${props.className ?? ""}`} />
+    <select
+      {...props}
+      className={`${fieldClass} ${widthOf(props.className)} appearance-none pr-9 ${props.className ?? ""}`}
+    />
   );
 }
 

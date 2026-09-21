@@ -114,7 +114,16 @@ function PlayerFormInner({ onClose, player }: { onClose: () => void; player: Pla
       }
     >
       <div className="space-y-4 pb-2">
-        <div className="grid grid-cols-[auto_1fr] gap-3">
+        <Field label="Ім'я та прізвище">
+          <Input
+            value={f.fullName}
+            onChange={(e) => set("fullName", e.target.value)}
+            placeholder="Іван Петренко"
+            autoFocus={!isEdit}
+          />
+        </Field>
+
+        <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
           <Field label="Номер">
             <Input
               inputMode="numeric"
@@ -122,30 +131,21 @@ function PlayerFormInner({ onClose, player }: { onClose: () => void; player: Pla
               maxLength={2}
               value={f.number}
               onChange={(e) => set("number", e.target.value.replace(/\D/g, ""))}
-              className="numeral w-20 text-center text-[26px]"
+              className="numeral w-full px-1 text-center text-[24px]"
               placeholder="—"
             />
           </Field>
-          <Field label="Ім'я та прізвище">
-            <Input
-              value={f.fullName}
-              onChange={(e) => set("fullName", e.target.value)}
-              placeholder="Іван Петренко"
-              autoFocus={!isEdit}
-            />
+          <Field label="Позиція">
+            <Select value={f.position} onChange={(e) => set("position", e.target.value as Position | "")}>
+              <option value="">Не вказано</option>
+              {POSITIONS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
-
-        <Field label="Позиція">
-          <Select value={f.position} onChange={(e) => set("position", e.target.value as Position | "")}>
-            <option value="">Не вказано</option>
-            {POSITIONS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
 
         <Field label="Статус">
           <Segmented value={f.status} onChange={(v) => set("status", v)} options={PLAYER_STATUS} />
