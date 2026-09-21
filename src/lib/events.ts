@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lt, or } from "drizzle-orm";
 import { db, getSettings, schema } from "@/db";
 import type { Attendance, Competition, Event, Player, RsvpStatus } from "@/db/schema";
 import type { TelegramUser } from "@/lib/telegram/initData";
@@ -72,18 +72,68 @@ export async function linkPlayerByTelegram(u: TelegramUser): Promise<Player | nu
   return updated ?? byName;
 }
 
+/**
+ * Запис явки може з'явитись двома шляхами: людина натиснула кнопку сама (є telegram id)
+ * або адмін відмітив гравця зі складу (є лише player id). Щоб одна людина не опинилась
+ * у списку двічі, шукаємо наявний рядок за будь-яким з двох ключів і оновлюємо його.
+ */
+async function upsertAttendance(
+  eventId: number,
+  who: { telegramUserId: number | null; playerId: number | null; displayName: string },
+  status: RsvpStatus,
+): Promise<Attendance> {
+  const keys = [
+    who.telegramUserId != null ? eq(attendance.telegramUserId, who.telegramUserId) : undefined,
+    who.playerId != null ? eq(attendance.playerId, who.playerId) : undefined,
+  ].filter((x) => x !== undefined);
+  const existing = await db.query.attendance.findMany({
+    where: and(eq(attendance.eventId, eventId), or(...keys)),
+  });
+
+  if (existing.length) {
+    const [keep, ...dupes] = existing;
+    if (dupes.length) await db.delete(attendance).where(inArray(attendance.id, dupes.map((d) => d.id)));
+    const [row] = await db
+      .update(attendance)
+      .set({
+        status,
+        displayName: who.displayName,
+        telegramUserId: who.telegramUserId ?? keep.telegramUserId,
+        playerId: who.playerId ?? keep.playerId,
+        updatedAt: new Date(),
+      })
+      .where(eq(attendance.id, keep.id))
+      .returning();
+    return row;
+  }
+
+  const [row] = await db.insert(attendance).values({ eventId, ...who, status }).returning();
+  return row;
+}
+
+/** Людина відмічається сама — кнопкою в треді або в застосунку. */
 export async function setRsvp(eventId: number, u: TelegramUser, status: RsvpStatus): Promise<Attendance> {
   const player = await linkPlayerByTelegram(u);
-  const displayName = player?.fullName ?? displayNameOf(u);
-  const [row] = await db
-    .insert(attendance)
-    .values({ eventId, telegramUserId: u.id, displayName, playerId: player?.id ?? null, status })
-    .onConflictDoUpdate({
-      target: [attendance.eventId, attendance.telegramUserId],
-      set: { status, displayName, playerId: player?.id ?? null, updatedAt: new Date() },
-    })
-    .returning();
-  return row;
+  return upsertAttendance(
+    eventId,
+    { telegramUserId: u.id, playerId: player?.id ?? null, displayName: player?.fullName ?? displayNameOf(u) },
+    status,
+  );
+}
+
+/** Адмін відмічає гравця зі складу. status = null — зняти відмітку. */
+export async function setPlayerRsvp(eventId: number, playerId: number, status: RsvpStatus | null): Promise<void> {
+  const player = await db.query.players.findFirst({ where: eq(players.id, playerId) });
+  if (!player) throw new Error("PLAYER_NOT_FOUND");
+  if (status === null) {
+    await db.delete(attendance).where(and(eq(attendance.eventId, eventId), eq(attendance.playerId, playerId)));
+    return;
+  }
+  await upsertAttendance(
+    eventId,
+    { telegramUserId: player.telegramUserId, playerId, displayName: player.fullName },
+    status,
+  );
 }
 
 export async function listCompetitions(includeArchived = false): Promise<Competition[]> {

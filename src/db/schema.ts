@@ -77,13 +77,17 @@ export const attendance = pgTable(
     eventId: integer("event_id")
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
-    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull(),
+    // null — коли адмін відмітив гравця, ще не прив'язаного до Telegram.
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }),
     displayName: text("display_name").notNull(),
     playerId: integer("player_id").references(() => players.id, { onDelete: "set null" }),
     status: rsvpEnum("status").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("attendance_event_user").on(t.eventId, t.telegramUserId)],
+  (t) => [
+    unique("attendance_event_user").on(t.eventId, t.telegramUserId),
+    unique("attendance_event_player").on(t.eventId, t.playerId),
+  ],
 );
 
 // Повідомлення, які бот уже відправив у тред по події. Потрібно, щоб

@@ -79,6 +79,12 @@ export const rsvpInput = z.object({
   status: z.enum(["going", "maybe", "not_going"]),
 });
 
+/** Адмін відмічає гравця зі складу; status = null знімає відмітку. */
+export const playerRsvpInput = z.object({
+  playerId: z.number().int().positive(),
+  status: z.enum(["going", "maybe", "not_going"]).nullable(),
+});
+
 export const settingsInput = z.object({
   teamName: z.string().trim().min(1, "вкажіть назву").max(60),
   timezone: z
