@@ -268,6 +268,23 @@ export const en: Dict = {
     announceDaysBefore: "Announce before",
     scoreUs: "Score",
     scoreThem: "Score",
+    position: "Position",
+    status: "Status",
+    telegramUserId: "Telegram",
+    startsAt: "Date and time",
+    competitionId: "League",
+    type: "Type",
+    isHome: "Home or away",
+    arriveMinutes: "Arrive before",
+    lineupRules: "Lineup requirements",
+    language: "Language",
+    shortName: "Short name",
+    ourName: "Name in league",
+    playoffSpots: "Playoff spots",
+    isArchived: "Archived",
+    setsHome: "Score",
+    setsAway: "Score",
+    walkover: "Walkover",
   },
 
   announceResult: {
@@ -303,6 +320,161 @@ export const en: Dict = {
     cancelledLower: "cancelled",
     rosterEmpty: "The roster is empty. Add players in the app.",
     injuredGroup: "Injured",
+  },
+
+  arrive: (time: string) => `Meet at ${time}`,
+  arriveLower: (time: string) => `meet at ${time}`,
+  pointsWord: (n: number) => pluralEn(n, "point", "points"),
+  ordinalPlace: (n: number) => {
+    const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+    return `${n}${s} place`;
+  },
+  ago: (minutes: number) => {
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    const h = Math.floor(minutes / 60);
+    if (h < 24) return `${h} h ago`;
+    const d = Math.floor(h / 24);
+    return `${d} ${pluralEn(d, "day", "days")} ago`;
+  },
+
+  lineup: {
+    title: "Lineup",
+    goingOf: (g: number, m: number) => `${g} of ${m}`,
+    ok: "Enough players",
+    short: "Short on players",
+    missing: (n: number) => `${n} more ${pluralEn(n, "player", "players")}`,
+    gaps: "Missing",
+    tooMany: (max: number) => `More than ${max} — only ${max} fit on the scoresheet`,
+    universalsCover: (n: number) => `Universals cover ${n}`,
+    noAnswer: "no answer",
+  },
+
+  protocol: {
+    button: "Lineup for the scoresheet",
+    copied: "Copied — paste it into the scoresheet",
+    manualTitle: "Copy it manually",
+    empty: "Nobody is in yet",
+  },
+
+  calendar: {
+    row: "Add to calendar",
+    title: "Calendar",
+    text: "All games and practices appear in your calendar and stay up to date.",
+    google: "Google Calendar",
+    apple: "Apple Calendar and others",
+    copy: "Copy link",
+    copied: "Link copied",
+    appleHint: "If your calendar didn’t open, copy the link and add it as a subscription.",
+  },
+
+  onboarding: {
+    title: "Who are you?",
+    text: "Pick yourself in the roster so your “In” answers count for you.",
+    notInList: "I’m not on the list",
+    later: "Later",
+    confirm: (name: string) => `Are you ${name}?`,
+    done: (name: string) => `Done — you’re ${name}`,
+    empty: "No free cards left — add yourself.",
+  },
+
+  table: {
+    title: "Table",
+    none: "No leagues with a table yet.",
+    noneAdmin: "Add the OMW website table link to a league, or import the league’s matches.",
+    clinched: "Playoffs clinched 🎉",
+    eliminated: "Out of playoff contention this season",
+    inZone: (gap: number, spots: number) => `In the playoff zone (top ${spots}), ${gap} ${pluralEn(gap, "point", "points")} clear`,
+    outZone: (gap: number, spots: number) =>
+      `Outside the playoff zone: ${gap} ${pluralEn(gap, "point", "points")} behind ${spots}th place`,
+    semifinal: (opp: string) => `If the season ended now: semi-final vs ${opp}`,
+    remaining: (n: number) => `${n} ${pluralEn(n, "game", "games")} left`,
+    record: (w: number, l: number, sf: number, sa: number) => `W ${w} – L ${l}, sets ${sf}:${sa}`,
+    colTeam: "Team",
+    colPlayed: "P",
+    colWL: "W–L",
+    colSets: "Sets",
+    colPts: "Pts",
+    zone: (spots: number) => `Playoffs: top ${spots}`,
+    external: "From the league website, refreshed every 30 minutes.",
+    externalNoPlayoff: "The organiser decides the finals format, so there’s no playoff forecast here.",
+    externalFailed: "The league website isn’t responding. Try again later.",
+    matches: "League matches",
+    postponed: "postponed",
+    enterResult: "Match result",
+    forfeit: (team: string) => `Walkover: ${team} didn’t show`,
+    clear: "Clear result",
+    resultSaved: "Result saved",
+    ourMatch: "This is our match — record the score on the game card.",
+    noResults: "No results yet — the table appears after the first round.",
+    adminHint: "Admins enter other teams’ results; the table and playoff status update automatically.",
+  },
+
+  mvp: {
+    title: "Season MVP",
+    empty: "No votes yet.",
+    matchMvp: (names: string) => `MVP: ${names}`,
+  },
+
+  audit: {
+    title: "Change log",
+    empty: "Nothing yet.",
+    lastChange: (who: string, when: string) => `Last edited by ${who}, ${when}`,
+    actions: {
+      create: "Created",
+      update: "Edited",
+      delete: "Deleted",
+      link: "Linked to Telegram",
+      result: "Score",
+    },
+    entities: {
+      player: "Player",
+      event: "Event",
+      competition: "League",
+      settings: "Settings",
+      match: "League match",
+    },
+  },
+
+  manageExtra: {
+    arriveMinutes: "Arrive before, min",
+    arriveHint: "The meeting time shows in announcements, the app and the calendar.",
+    lineupTitle: "Lineup requirements",
+    lineupHint: "Min–max per position. A universal fills any gap.",
+    minPlayers: "Minimum players",
+    maxPlayers: "Max on scoresheet",
+    shortName: "Short name",
+    shortNamePh: "ALG",
+    ourName: "Our name in the league",
+    ourNamePh: "REDMOON",
+    playoffSpots: "Playoff spots",
+  },
+
+  botExtra: {
+    lineupOk: (n: number) => `👍 Enough players (${n})`,
+    lineupShort: (g: number, m: number) => `⚠️ Lineup: ${g} of ${m}`,
+    lineupGaps: (list: string) => `Missing: ${list}`,
+    nonResponders: (list: string) => `❔ No answer yet: ${list}`,
+    shortageHeader: "🚨 Short on players",
+    resultPrompt: (opp: string) => `🏐 How did it go against ${opp}?`,
+    resultPromptHint: "An admin records the score.",
+    otherScore: "Other score",
+    resultLine: (won: boolean, us: number, them: number, opp: string) =>
+      `${won ? "🏆 Win" : "Loss"} ${us}:${them} — ${opp}`,
+    recordedBy: (name: string) => `Recorded by ${name}`,
+    adminsOnlyScore: "Only group admins can record the score.",
+    scoreSaved: "Score saved",
+    mvpPrompt: (opp: string) => `🏅 Who was MVP against ${opp}?`,
+    mvpVotes: (n: number) => `${n} ${pluralEn(n, "vote", "votes")} so far. Result tomorrow.`,
+    mvpVoted: (name: string) => `Voted for ${name}`,
+    mvpSelf: "You can’t vote for yourself 🙂",
+    mvpClosed: "Voting is closed.",
+    mvpWinner: (opp: string, names: string, votes: number) =>
+      `🏅 MVP against ${opp}: ${names} — ${votes} ${pluralEn(votes, "vote", "votes")}`,
+    mvpNoVotes: (opp: string) => `🏅 MVP against ${opp}: nobody voted.`,
+    digestTitle: "🗓 This week",
+    backupCaption: (date: string) => `Database backup, ${date}`,
+    errorAlert: (where: string, msg: string) => `⚠️ Bot error (${where}): ${msg}`,
   },
 
   commands: {

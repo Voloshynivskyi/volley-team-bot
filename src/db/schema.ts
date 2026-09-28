@@ -2,6 +2,7 @@ import {
   bigint,
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   serial,
@@ -23,7 +24,7 @@ export const competitionTypeEnum = pgEnum("competition_type", ["league", "tourna
 export const eventTypeEnum = pgEnum("event_type", ["game", "training"]);
 export const eventStatusEnum = pgEnum("event_status", ["scheduled", "finished", "cancelled"]);
 export const rsvpEnum = pgEnum("rsvp_status", ["going", "maybe", "not_going"]);
-export const postKindEnum = pgEnum("post_kind", ["announce", "reminder"]);
+export const postKindEnum = pgEnum("post_kind", ["announce", "reminder", "shortage", "result", "mvp"]);
 
 export const players = pgTable("players", {
   id: serial("id").primaryKey(),
@@ -46,6 +47,12 @@ export const competitions = pgTable("competitions", {
   type: competitionTypeEnum("type").notNull().default("league"),
   season: text("season"),
   standingsUrl: text("standings_url"),
+  /** Коротко для перемикачів: "ALG", "OMW". */
+  shortName: text("short_name"),
+  /** Як наша команда записана в розкладі ліги: "REDMOON", "RED Moon". */
+  ourName: text("our_name"),
+  /** Скільки перших місць виходять у плей-оф (null — невідомо). */
+  playoffSpots: integer("playoff_spots"),
   isArchived: boolean("is_archived").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -105,6 +112,11 @@ export const posts = pgTable(
     kind: postKindEnum("kind").notNull(),
     offsetHours: integer("offset_hours").notNull().default(0),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    pinned: boolean("pinned").notNull().default(false),
+    /** Бот прибрав повідомлення з треду (старе нагадування). Рядок лишається для ідемпотентності. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    /** Для голосування MVP: коли підбито підсумок. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
   },
   (t) => [unique("posts_event_kind_offset").on(t.eventId, t.kind, t.offsetHours)],
 );
@@ -121,6 +133,14 @@ export const settings = pgTable("settings", {
   /** Мова повідомлень бота в групі: uk | ru | en. */
   language: text("language").notNull().default("uk"),
   announceDaysBefore: integer("announce_days_before").notNull().default(3),
+  /** За скільки хвилин до початку гри треба бути на місці. */
+  arriveMinutes: integer("arrive_minutes").notNull().default(45),
+  /** Вимоги до складу на гру (JSON, див. lib/lineup). null — типові. */
+  lineupRules: text("lineup_rules"),
+  /** Секрет для посилання-підписки на календар. */
+  calendarToken: text("calendar_token"),
+  lastDigestWeek: text("last_digest_week"),
+  lastBackupWeek: text("last_backup_week"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -136,3 +156,57 @@ export type EventType = (typeof eventTypeEnum.enumValues)[number];
 export type EventStatus = (typeof eventStatusEnum.enumValues)[number];
 export type CompetitionType = (typeof competitionTypeEnum.enumValues)[number];
 export type RsvpStatus = (typeof rsvpEnum.enumValues)[number];
+
+/** Усі матчі ліги, включно з чужими — для турнірної таблиці. */
+export const leagueMatches = pgTable("league_matches", {
+  id: serial("id").primaryKey(),
+  competitionId: integer("competition_id")
+    .notNull()
+    .references(() => competitions.id, { onDelete: "cascade" }),
+  round: integer("round"),
+  matchNo: integer("match_no"),
+  startsAt: timestamp("starts_at", { withTimezone: true }),
+  home: text("home").notNull(),
+  away: text("away").notNull(),
+  setsHome: integer("sets_home"),
+  setsAway: integer("sets_away"),
+  /** Хто віддав walkover: "home" | "away". */
+  walkover: text("walkover"),
+  postponed: boolean("postponed").notNull().default(false),
+  /** Наш матч — пов'язана подія з розкладу; рахунок береться з неї. */
+  eventId: integer("event_id").references(() => events.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const mvpVotes = pgTable(
+  "mvp_votes",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    voterId: bigint("voter_id", { mode: "number" }).notNull(),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("mvp_votes_event_voter").on(t.eventId, t.voterId)],
+);
+
+/** Хто, коли й що змінив. */
+export const auditLog = pgTable("audit_log", {
+  id: serial("id").primaryKey(),
+  entity: text("entity").notNull(),
+  entityId: integer("entity_id"),
+  action: text("action").notNull(),
+  actorId: bigint("actor_id", { mode: "number" }),
+  actorName: text("actor_name").notNull(),
+  changes: jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type LeagueMatch = typeof leagueMatches.$inferSelect;
+export type MvpVote = typeof mvpVotes.$inferSelect;
+export type AuditEntry = typeof auditLog.$inferSelect;
+export type PostKind = (typeof postKindEnum.enumValues)[number];

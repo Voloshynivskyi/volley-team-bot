@@ -6,8 +6,12 @@ import { env } from "@/lib/env";
 import { linkPlayerByTelegram, listEvents, listPlayers, loadEventBundle, nextScheduledEvent, setRsvp } from "@/lib/events";
 import { dict, langFromCode, type Lang } from "@/lib/i18n";
 import { RSVP_EMOJI } from "@/lib/positions";
+import { actorOf } from "@/lib/audit";
+import { voteMvp } from "@/lib/mvp";
+import { notifyOwner } from "@/lib/notify";
+import { applyResult } from "@/lib/results";
 import { miniAppLink } from "./api";
-import { invalidateAdminCache } from "./admins";
+import { invalidateAdminCache, resolveRole } from "./admins";
 import { buildEventText, esc, rosterText, rsvpKeyboard, scheduleLine, teamLang } from "./messages";
 import { refreshEventPosts } from "./post";
 
@@ -146,8 +150,36 @@ bot.callbackQuery(/^rsvp:(\d+):(going|maybe|not_going)$/, async (ctx) => {
   await ctx.answerCallbackQuery({ text: `${RSVP_EMOJI[status]} ${t.bot.recorded(t.rsvp[status].toLowerCase())}` });
 });
 
+/** Кнопки рахунку під "Як зіграли?" — записати може лише адмін. */
+bot.callbackQuery(/^score:(\d+):(\d):(\d)$/, async (ctx) => {
+  const t = dict(await personalLang(ctx));
+  const [eventId, us, them] = [1, 2, 3].map((i) => Number(ctx.match[i]));
+  const { isAdmin } = await resolveRole(ctx.from.id);
+  if (!isAdmin) {
+    await ctx.answerCallbackQuery({ text: t.botExtra.adminsOnlyScore, show_alert: true });
+    return;
+  }
+  const ok = await applyResult(eventId, us, them, actorOf(ctx.from));
+  await ctx.answerCallbackQuery({ text: ok ? t.botExtra.scoreSaved : t.bot.eventInactive });
+});
+
+/** Голос за MVP матчу. Змінити голос можна, поки голосування відкрите. */
+bot.callbackQuery(/^mvp:(\d+):(\d+)$/, async (ctx) => {
+  const t = dict(await personalLang(ctx));
+  const r = await voteMvp(Number(ctx.match[1]), ctx.from, Number(ctx.match[2]));
+  const text = r.ok
+    ? t.botExtra.mvpVoted(r.name)
+    : r.reason === "self"
+      ? t.botExtra.mvpSelf
+      : r.reason === "closed"
+        ? t.botExtra.mvpClosed
+        : t.bot.eventInactive;
+  await ctx.answerCallbackQuery({ text });
+});
+
 bot.on("callback_query:data", (ctx) => ctx.answerCallbackQuery());
 
-bot.catch((err) => {
+bot.catch(async (err) => {
   console.error("bot error", err.error);
+  await notifyOwner("bot", err.error);
 });

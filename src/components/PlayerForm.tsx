@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import type { PlayerStatus, Position } from "@/db/schema";
-import { api, type PlayerDTO } from "@/lib/client/api";
+import { api, useAudit, type PlayerDTO } from "@/lib/client/api";
 import { confirmDialog, haptic } from "@/lib/client/tg";
 import { options, PLAYER_STATUS_VALUES, POSITION_VALUES } from "@/lib/positions";
 import { useApp } from "./context";
@@ -24,16 +24,31 @@ export default function PlayerForm({
   open,
   onClose,
   player,
+  defaultLinkMe,
 }: {
   open: boolean;
   onClose: () => void;
   player: PlayerDTO | null;
+  /** Відкрито з "Хто ви?" — перемикач "Це я" одразу увімкнений. */
+  defaultLinkMe?: boolean;
 }) {
   if (!open) return null;
-  return <PlayerFormInner onClose={onClose} player={player} />;
+  return <PlayerFormInner onClose={onClose} player={player} defaultLinkMe={defaultLinkMe} />;
 }
 
-function PlayerFormInner({ onClose, player }: { onClose: () => void; player: PlayerDTO | null }) {
+function minutesSince(iso: string): number {
+  return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+}
+
+function PlayerFormInner({
+  onClose,
+  player,
+  defaultLinkMe,
+}: {
+  onClose: () => void;
+  player: PlayerDTO | null;
+  defaultLinkMe?: boolean;
+}) {
   const { me, t, isAdmin } = useApp();
   const toast = useToast();
   const { mutate } = useSWRConfig();
@@ -52,8 +67,10 @@ function PlayerFormInner({ onClose, player }: { onClose: () => void; player: Pla
     heightCm: player?.heightCm != null ? String(player.heightCm) : "",
     note: player?.note ?? "",
     // Учасник, що додає нову картку без власної, найчастіше додає себе.
-    linkMe: canLinkMe && !isEdit && !isAdmin,
+    linkMe: canLinkMe && (defaultLinkMe ?? (!isEdit && !isAdmin)),
   }));
+  const { data: history } = useAudit(player ? "player" : null, player?.id, 1);
+  const last = history?.[0];
   const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((s) => ({ ...s, [k]: v }));
@@ -134,6 +151,11 @@ function PlayerFormInner({ onClose, player }: { onClose: () => void; player: Pla
       }
     >
       <div className="space-y-4 pb-2">
+        {last && (
+          <p className="-mt-1 text-[13px] text-hint">
+            {t.audit.lastChange(last.actorName, t.ago(minutesSince(last.createdAt)))}
+          </p>
+        )}
         {canLinkMe && (
           <div className="rounded-2xl bg-surface px-4 py-1">
             <Toggle checked={f.linkMe} onChange={toggleLinkMe} label={t.playerForm.itsMe} hint={t.playerForm.itsMeHint} />

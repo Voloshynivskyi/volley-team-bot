@@ -1,6 +1,8 @@
 import useSWR from "swr";
-import type { Attendance, Competition, Event, Player, Settings } from "@/db/schema";
+import type { Attendance, AuditEntry, Competition, Event, LeagueMatch, Player, Settings } from "@/db/schema";
 import { dict, type Lang } from "@/lib/i18n";
+import type { LineupRules } from "@/lib/lineup";
+import type { PlayoffStatus, StandingRow } from "@/lib/standings";
 import { initData } from "./tg";
 
 // Поточна мова інтерфейсу: сервер відповідає помилками цією мовою.
@@ -21,7 +23,27 @@ export type PlayerDTO = Iso<Player>;
 export type CompetitionDTO = Iso<Competition>;
 export type AttendanceDTO = Iso<Attendance>;
 export type SettingsDTO = Iso<Settings>;
-export type EventDTO = Iso<Event> & { competition: CompetitionDTO | null; attendance: AttendanceDTO[] };
+export type EventDTO = Iso<Event> & {
+  competition: CompetitionDTO | null;
+  attendance: AttendanceDTO[];
+  /** Лише в картці однієї події. */
+  mvp?: { names: string[]; votes: number; closed: boolean } | null;
+};
+export type AuditDTO = Iso<AuditEntry>;
+export type LeagueMatchDTO = Iso<LeagueMatch> & { isOurs: boolean };
+export type StandingsDTO = {
+  leagues: {
+    competition: { id: number; name: string; shortName: string | null; standingsUrl: string | null };
+    mode: "computed" | "external";
+    rows: (StandingRow & { isUs: boolean })[];
+    spots: number | null;
+    status: PlayoffStatus | null;
+    us: StandingRow | null;
+    matches: LeagueMatchDTO[];
+    error?: "external_failed";
+  }[];
+  mvp: { playerId: number; fullName: string; number: number | null; wins: number }[];
+};
 
 export type Me = {
   user: {
@@ -46,6 +68,9 @@ export type Me = {
     threadId: number | null;
     reminderHours: string;
     announceDaysBefore: number;
+    arriveMinutes: number;
+    lineupRules: LineupRules;
+    calendarUrl: string | null;
   };
 };
 
@@ -107,4 +132,37 @@ export function useCompetitions(all = false) {
 
 export function useSettings(enabled: boolean) {
   return useSWR<SettingsDTO, ApiError>(enabled ? "/api/settings" : null, fetcher);
+}
+
+export const STANDINGS_KEY = "/api/standings";
+
+export function useStandings(enabled = true) {
+  return useSWR<StandingsDTO, ApiError>(enabled ? STANDINGS_KEY : null, fetcher);
+}
+
+export function useAudit(entity: string | null, id?: number | null, limit = 50) {
+  const key = entity ? `/api/audit?entity=${entity}${id ? `&id=${id}` : ""}&limit=${limit}` : null;
+  return useSWR<AuditDTO[], ApiError>(key, fetcher, { revalidateOnFocus: false });
+}
+
+/** Копіювання в буфер з запасним способом для старих WebView. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
 }

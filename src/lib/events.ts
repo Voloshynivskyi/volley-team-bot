@@ -41,10 +41,10 @@ export async function getEventRow(id: number): Promise<EventRow | null> {
 }
 
 export async function loadEventBundle(id: number): Promise<EventBundle | null> {
-  const [row, settings] = await Promise.all([getEventRow(id), getSettings()]);
+  const [row, settings, roster] = await Promise.all([getEventRow(id), getSettings(), listPlayers()]);
   if (!row) return null;
   const { competition, attendance: att, ...event } = row;
-  return { event, competition, attendance: att, settings };
+  return { event, competition, attendance: att, settings, players: roster };
 }
 
 export function displayNameOf(u: TelegramUser): string {

@@ -26,6 +26,8 @@ export function handle<C = unknown>(fn: Handler<C>): Handler<C> {
         return json({ error: label ? t.errors.invalidField(label) : t.errors.checkForm, issues: err.issues }, 400);
       }
       console.error(err);
+      const { notifyOwner } = await import("@/lib/notify");
+      await notifyOwner(new URL(req.url).pathname, err);
       return json({ error: t.errors.server }, 500);
     }
   };

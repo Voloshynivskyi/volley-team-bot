@@ -3,9 +3,19 @@
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import type { CompetitionType } from "@/db/schema";
-import { api, useCompetitions, useSettings, type CompetitionDTO, type SettingsDTO } from "@/lib/client/api";
+import {
+  api,
+  STANDINGS_KEY,
+  useAudit,
+  useCompetitions,
+  useSettings,
+  type AuditDTO,
+  type CompetitionDTO,
+  type SettingsDTO,
+} from "@/lib/client/api";
 import { confirmDialog, haptic } from "@/lib/client/tg";
 import { isLang, LANGS, type Lang } from "@/lib/i18n";
+import { LINEUP_POSITIONS, parseLineupRules, type LineupRules } from "@/lib/lineup";
 import { COMPETITION_TYPE_VALUES, options } from "@/lib/positions";
 import { useApp } from "./context";
 import { PageHeader } from "./i18n";
@@ -41,6 +51,7 @@ export default function Manage() {
             )}
           </div>
         </Section>
+        <AuditSection />
       </div>
     </>
   );
@@ -155,10 +166,14 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
   const [type, setType] = useState<CompetitionType>(competition?.type ?? "league");
   const [season, setSeason] = useState(competition?.season ?? "");
   const [url, setUrl] = useState(competition?.standingsUrl ?? "");
+  const [shortName, setShortName] = useState(competition?.shortName ?? "");
+  const [ourName, setOurName] = useState(competition?.ourName ?? "");
+  const [spots, setSpots] = useState(competition?.playoffSpots != null ? String(competition.playoffSpots) : "");
   const [archived, setArchived] = useState(competition?.isArchived ?? false);
   const [saving, setSaving] = useState(false);
 
-  const refresh = () => Promise.all([mutate("/api/competitions"), mutate("/api/competitions?all=1")]);
+  const refresh = () =>
+    Promise.all([mutate("/api/competitions"), mutate("/api/competitions?all=1"), mutate(STANDINGS_KEY)]);
 
   async function submit() {
     if (!name.trim()) {
@@ -167,7 +182,16 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
     }
     setSaving(true);
     try {
-      const body = { name, type, season, standingsUrl: url, isArchived: archived };
+      const body = {
+        name,
+        type,
+        season,
+        standingsUrl: url,
+        shortName,
+        ourName,
+        playoffSpots: spots ? Number(spots) : null,
+        isArchived: archived,
+      };
       if (competition) await api(`/api/competitions/${competition.id}`, { method: "PATCH", body });
       else await api("/api/competitions", { method: "POST", body });
       await refresh();
@@ -228,6 +252,23 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
         <Field label={t.manage.standingsUrl}>
           <Input type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
         </Field>
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
+          <Field label={t.manageExtra.shortName}>
+            <Input value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder={t.manageExtra.shortNamePh} maxLength={12} />
+          </Field>
+          <Field label={t.manageExtra.ourName}>
+            <Input value={ourName} onChange={(e) => setOurName(e.target.value)} placeholder={t.manageExtra.ourNamePh} />
+          </Field>
+        </div>
+        <Field label={t.manageExtra.playoffSpots}>
+          <Input
+            inputMode="numeric"
+            value={spots}
+            onChange={(e) => setSpots(e.target.value.replace(/\D/g, ""))}
+            className="w-24"
+            placeholder="4"
+          />
+        </Field>
         {competition && (
           <Toggle checked={archived} onChange={setArchived} label={t.manage.archived} hint={t.manage.archivedHint} />
         )}
@@ -264,14 +305,33 @@ function SettingsForm({ initial }: { initial: SettingsDTO }) {
   const [reminderHours, setReminderHours] = useState(initial.reminderHours);
   const [announceDays, setAnnounceDays] = useState(String(initial.announceDaysBefore));
   const [language, setLanguage] = useState<Lang>(isLang(initial.language) ? initial.language : "uk");
+  const [arrive, setArrive] = useState(String(initial.arriveMinutes));
+  const [rules, setRules] = useState<LineupRules>(() => parseLineupRules(initial.lineupRules));
   const [saving, setSaving] = useState(false);
+
+  const num = (v: string) => Number(v.replace(/\D/g, "")) || 0;
+  const setPos = (p: (typeof LINEUP_POSITIONS)[number], key: "min" | "max", v: string) =>
+    setRules((r) => ({ ...r, positions: { ...r.positions, [p]: { ...r.positions[p], [key]: num(v) } } }));
 
   async function save() {
     setSaving(true);
     try {
       await api("/api/settings", {
         method: "PATCH",
-        body: { teamName, timezone, reminderHours, announceDaysBefore: Number(announceDays) || 0, language },
+        body: {
+          teamName,
+          timezone,
+          reminderHours,
+          announceDaysBefore: Number(announceDays) || 0,
+          language,
+          arriveMinutes: num(arrive),
+          lineupRules: {
+            ...rules,
+            positions: Object.fromEntries(
+              LINEUP_POSITIONS.map((p) => [p, { min: rules.positions[p].min, max: Math.max(rules.positions[p].min, rules.positions[p].max) }]),
+            ),
+          },
+        },
       });
       await Promise.all([mutate("/api/settings"), mutate("/api/me")]);
       haptic("success");
@@ -311,9 +371,89 @@ function SettingsForm({ initial }: { initial: SettingsDTO }) {
       <Field label={t.manage.botLanguage} hint={t.manage.botLanguageHint}>
         <Segmented value={language} onChange={setLanguage} options={LANGS} />
       </Field>
+      <Field label={t.manageExtra.arriveMinutes} hint={t.manageExtra.arriveHint}>
+        <Input inputMode="numeric" value={arrive} onChange={(e) => setArrive(e.target.value.replace(/\D/g, ""))} className="w-24" />
+      </Field>
+
+      <div>
+        <p className="mb-1.5 text-[14px] font-medium text-hint">{t.manageExtra.lineupTitle}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t.manageExtra.minPlayers}>
+            <Input inputMode="numeric" value={String(rules.minPlayers)} onChange={(e) => setRules((r) => ({ ...r, minPlayers: num(e.target.value) }))} />
+          </Field>
+          <Field label={t.manageExtra.maxPlayers}>
+            <Input inputMode="numeric" value={String(rules.maxPlayers)} onChange={(e) => setRules((r) => ({ ...r, maxPlayers: num(e.target.value) }))} />
+          </Field>
+        </div>
+        <div className="mt-3 overflow-hidden rounded-xl border border-sep">
+          {LINEUP_POSITIONS.map((p) => (
+            <div key={p} className="flex items-center gap-2 border-b border-sep px-3 py-2 last:border-b-0">
+              <span className="min-w-0 flex-1 truncate text-[15px]">{t.positions[p].label}</span>
+              <Input
+                inputMode="numeric"
+                aria-label={`${t.positions[p].label} min`}
+                value={String(rules.positions[p].min)}
+                onChange={(e) => setPos(p, "min", e.target.value)}
+                className="w-12 px-1 text-center"
+              />
+              <span className="text-hint">–</span>
+              <Input
+                inputMode="numeric"
+                aria-label={`${t.positions[p].label} max`}
+                value={String(rules.positions[p].max)}
+                onChange={(e) => setPos(p, "max", e.target.value)}
+                className="w-12 px-1 text-center"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="mt-1 text-[13px] text-hint">{t.manageExtra.lineupHint}</p>
+      </div>
       <Button variant="primary" block onClick={save} loading={saving}>
         {t.common.save}
       </Button>
+    </div>
+  );
+}
+
+function minutesSince(iso: string): number {
+  return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+}
+
+/** Останні зміни: хто, що й коли. Бачать лише адміни. */
+function AuditSection() {
+  const { t } = useApp();
+  const { data, isLoading } = useAudit("all", null, 30);
+  return (
+    <Section title={t.audit.title}>
+      {isLoading && (
+        <div className="flex justify-center py-6 text-hint">
+          <Spinner small />
+        </div>
+      )}
+      {data && !data.length && <p className="px-4 py-4 text-[15px] text-hint">{t.audit.empty}</p>}
+      {data?.map((a) => <AuditRow key={a.id} entry={a} />)}
+    </Section>
+  );
+}
+
+function AuditRow({ entry: a }: { entry: AuditDTO }) {
+  const { t } = useApp();
+  const fields = Object.keys(a.changes ?? {})
+    .map((k) => t.fields[k] ?? k)
+    .filter((v, i, arr) => arr.indexOf(v) === i);
+  const what = [t.audit.entities[a.entity] ?? a.entity, t.audit.actions[a.action] ?? a.action].join(" · ");
+  const subject = a.changes?.fullName?.to ?? a.changes?.fullName?.from ?? a.changes?.name?.to ?? a.changes?.opponent?.to;
+  return (
+    <div className="border-b border-sep px-4 py-2.5 last:border-b-0">
+      <p className="text-[15px]">
+        <span className="font-medium">{what}</span>
+        {typeof subject === "string" && subject ? ` — ${subject}` : ""}
+      </p>
+      {fields.length > 0 && a.action === "update" && <p className="truncate text-[13px] text-hint">{fields.join(", ")}</p>}
+      <p className="text-[12px] text-hint">
+        {a.actorName}, {t.ago(minutesSince(a.createdAt))}
+      </p>
     </div>
   );
 }

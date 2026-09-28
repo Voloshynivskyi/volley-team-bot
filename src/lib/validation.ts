@@ -46,6 +46,9 @@ export const competitionInput = z.object({
   type: z.enum(competitionTypeEnum.enumValues).default("league"),
   season: text(20),
   standingsUrl: url,
+  shortName: text(12),
+  ourName: text(80),
+  playoffSpots: z.number().int().min(1).max(16).nullable().optional(),
   isArchived: z.boolean().optional(),
 });
 export type CompetitionInput = z.infer<typeof competitionInput>;
@@ -106,5 +109,21 @@ export const settingsInput = z.object({
     .regex(/^(\d{1,3}(\s*,\s*\d{1,3})*)?$/),
   announceDaysBefore: z.number().int().min(0).max(30),
   language: z.enum(["uk", "ru", "en"]),
+  arriveMinutes: z.number().int().min(0).max(240),
+  lineupRules: z.object({
+    minPlayers: z.number().int().min(1).max(20),
+    maxPlayers: z.number().int().min(1).max(30),
+    positions: z.record(
+      z.enum(["setter", "outside", "middle", "opposite", "libero"]),
+      z.object({ min: z.number().int().min(0).max(6), max: z.number().int().min(0).max(8) }),
+    ),
+  }),
 });
 export type SettingsInput = z.infer<typeof settingsInput>;
+
+/** Результат чужого матчу ліги (або нашого — тоді піде через картку гри). */
+export const leagueMatchPatch = z.object({
+  setsHome: z.number().int().min(0).max(5).nullable(),
+  setsAway: z.number().int().min(0).max(5).nullable(),
+  walkover: z.enum(["home", "away"]).nullable(),
+});
