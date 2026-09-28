@@ -17,8 +17,8 @@ export const POST = handle<Ctx>(async (req: NextRequest, ctx) => {
   const { status } = await parseBody(req, rsvpInput);
 
   const event = await db.query.events.findFirst({ where: eq(schema.events.id, id) });
-  if (!event) throw new HttpError(404, "Подію не знайдено");
-  if (event.status !== "scheduled") throw new HttpError(400, "Ця подія вже неактуальна");
+  if (!event) throw new HttpError(404, "eventNotFound");
+  if (event.status !== "scheduled") throw new HttpError(400, "eventInactive");
 
   await setRsvp(id, viewer.user, status);
   await refreshEventPosts(id);

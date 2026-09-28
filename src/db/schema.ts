@@ -118,6 +118,8 @@ export const settings = pgTable("settings", {
   chatTitle: text("chat_title"),
   timezone: text("timezone").notNull().default("Europe/Kyiv"),
   reminderHours: text("reminder_hours").notNull().default("24,2"),
+  /** Мова повідомлень бота в групі: uk | ru | en. */
+  language: text("language").notNull().default("uk"),
   announceDaysBefore: integer("announce_days_before").notNull().default(3),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

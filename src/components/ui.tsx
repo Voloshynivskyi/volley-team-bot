@@ -11,7 +11,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { getApiLang } from "@/lib/client/api";
 import { tg } from "@/lib/client/tg";
+import { dict } from "@/lib/i18n";
+import { useT } from "./i18n";
 
 /* ---------- Кнопки ---------- */
 
@@ -53,11 +56,12 @@ export function Button({
 }
 
 export function Spinner({ small }: { small?: boolean }) {
+  const { t } = useT();
   const s = small ? "h-4 w-4 border-2" : "h-7 w-7 border-[3px]";
   return (
     <span
       role="status"
-      aria-label="Завантаження"
+      aria-label={t.common.loading}
       className={`${s} inline-block animate-spin rounded-full border-current border-r-transparent opacity-70`}
     />
   );
@@ -87,7 +91,7 @@ export function Field({
 
 /** Поле займає всю ширину, якщо викликач не задав свою (w-20, w-28…). */
 function widthOf(className?: string) {
-  return /(^|s)w-/.test(className ?? "") ? "" : "w-full";
+  return /(^|\s)w-/.test(className ?? "") ? "" : "w-full";
 }
 
 const fieldClass =
@@ -290,6 +294,7 @@ export function Sheet({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const { t } = useT();
   const closeRef = useRef(onClose);
   useEffect(() => {
     closeRef.current = onClose;
@@ -316,7 +321,7 @@ export function Sheet({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center">
-      <button aria-label="Закрити" className="fade-enter absolute inset-0 bg-black/40" onClick={onClose} />
+      <button aria-label={t.common.close} className="fade-enter absolute inset-0 bg-black/40" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
@@ -330,7 +335,7 @@ export function Sheet({
             type="button"
             onClick={onClose}
             className="mt-3 -mr-2 flex h-9 w-9 items-center justify-center rounded-full text-hint active:bg-court-tint"
-            aria-label="Закрити"
+            aria-label={t.common.close}
           >
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
@@ -393,5 +398,5 @@ export function useToast() {
 }
 
 export function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : "Щось пішло не так";
+  return err instanceof Error ? err.message : dict(getApiLang()).common.somethingWrong;
 }

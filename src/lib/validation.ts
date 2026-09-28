@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { competitionTypeEnum, eventStatusEnum, eventTypeEnum, playerStatusEnum, positionEnum } from "@/db/schema";
 
+// Тексти помилок тут не задаємо: handle() показує "перевірте поле «…»" мовою користувача.
+
 /** Текстове поле форми: обрізає пробіли, порожній рядок → null. */
 const text = (max: number) =>
   z
     .string()
     .trim()
-    .max(max, `не більше ${max} символів`)
+    .max(max)
     .transform((s) => (s.length ? s : null))
     .nullable()
     .optional();
@@ -15,12 +17,12 @@ const url = z
   .string()
   .trim()
   .transform((s) => (s.length ? s : null))
-  .pipe(z.url("має бути посиланням").nullable())
+  .pipe(z.url().nullable())
   .nullable()
   .optional();
 
 export const playerInput = z.object({
-  fullName: z.string().trim().min(1, "вкажіть ім'я").max(80),
+  fullName: z.string().trim().min(1).max(80),
   number: z.number().int().min(0).max(99).nullable().optional(),
   position: z.enum(positionEnum.enumValues).nullable().optional(),
   status: z.enum(playerStatusEnum.enumValues).default("active"),
@@ -33,12 +35,14 @@ export const playerInput = z.object({
     .optional(),
   heightCm: z.number().int().min(120).max(230).nullable().optional(),
   note: text(300),
+  /** "Це я": прив'язати картку до Telegram того, хто зберігає. */
+  linkMe: z.boolean().optional(),
 });
 export type PlayerInput = z.infer<typeof playerInput>;
 export const playerPatch = playerInput.partial();
 
 export const competitionInput = z.object({
-  name: z.string().trim().min(1, "вкажіть назву").max(80),
+  name: z.string().trim().min(1).max(80),
   type: z.enum(competitionTypeEnum.enumValues).default("league"),
   season: text(20),
   standingsUrl: url,
@@ -47,9 +51,7 @@ export const competitionInput = z.object({
 export type CompetitionInput = z.infer<typeof competitionInput>;
 export const competitionPatch = competitionInput.partial();
 
-const localDateTime = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "вкажіть дату й час");
+const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
 
 export const eventInput = z.object({
   type: z.enum(eventTypeEnum.enumValues).default("game"),
@@ -86,22 +88,23 @@ export const playerRsvpInput = z.object({
 });
 
 export const settingsInput = z.object({
-  teamName: z.string().trim().min(1, "вкажіть назву").max(60),
+  teamName: z.string().trim().min(1).max(60),
   timezone: z
     .string()
     .trim()
     .refine((tz) => {
       try {
-        new Intl.DateTimeFormat("uk", { timeZone: tz });
+        new Intl.DateTimeFormat("en", { timeZone: tz });
         return true;
       } catch {
         return false;
       }
-    }, "невідомий часовий пояс"),
+    }),
   reminderHours: z
     .string()
     .trim()
-    .regex(/^(\d{1,3}(\s*,\s*\d{1,3})*)?$/, "список годин через кому, напр. 24, 2"),
+    .regex(/^(\d{1,3}(\s*,\s*\d{1,3})*)?$/),
   announceDaysBefore: z.number().int().min(0).max(30),
+  language: z.enum(["uk", "ru", "en"]),
 });
 export type SettingsInput = z.infer<typeof settingsInput>;

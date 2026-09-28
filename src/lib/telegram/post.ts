@@ -4,7 +4,8 @@ import type { Post } from "@/db/schema";
 import { loadEventBundle } from "@/lib/events";
 import { hoursUntil } from "@/lib/time";
 import { api, miniAppLink } from "./api";
-import { buildEventText, reminderHeader, rsvpKeyboard, type EventBundle } from "./messages";
+import { dict } from "@/lib/i18n";
+import { buildEventText, reminderHeader, rsvpKeyboard, teamLang, type EventBundle } from "./messages";
 
 const { events, posts } = schema;
 
@@ -14,14 +15,13 @@ export function parseReminderHours(raw: string): number[] {
   );
 }
 
-function headerFor(kind: Post["kind"], offsetHours: number) {
-  return kind === "reminder" ? reminderHeader(offsetHours) : undefined;
-}
-
+/** Повідомлення в групі пишуться мовою команди — їх читають усі разом. */
 async function renderPost(b: EventBundle, kind: Post["kind"], offsetHours: number) {
-  const text = buildEventText(b, headerFor(kind, offsetHours));
+  const lang = teamLang(b.settings);
+  const header = kind === "reminder" ? reminderHeader(dict(lang), offsetHours) : undefined;
+  const text = buildEventText(b, lang, header);
   const link = await miniAppLink(`event_${b.event.id}`);
-  const reply_markup = b.event.status === "scheduled" ? rsvpKeyboard(b.event.id, link) : undefined;
+  const reply_markup = b.event.status === "scheduled" ? rsvpKeyboard(lang, b.event.id, link) : undefined;
   return { text, reply_markup };
 }
 
@@ -89,11 +89,11 @@ export type ReminderRun = {
 export async function runReminders(now = new Date()): Promise<ReminderRun> {
   const s = await getSettings();
   const result: ReminderRun = { announced: [], reminded: [] };
-  if (!s.chatId) return { ...result, skipped: "Група не прив'язана. Надішліть /here у потрібному треді." };
+  if (!s.chatId) return { ...result, skipped: "No group linked. Send /here in the target thread." };
 
   const hours = parseReminderHours(s.reminderHours);
   const horizonH = Math.max(s.announceDaysBefore * 24, ...hours, 0);
-  if (horizonH <= 0) return { ...result, skipped: "Анонси й нагадування вимкнені." };
+  if (horizonH <= 0) return { ...result, skipped: "Announcements and reminders are turned off." };
 
   const upcoming = await db.query.events.findMany({
     where: and(

@@ -1,6 +1,16 @@
 import useSWR from "swr";
 import type { Attendance, Competition, Event, Player, Settings } from "@/db/schema";
+import { dict, type Lang } from "@/lib/i18n";
 import { initData } from "./tg";
+
+// Поточна мова інтерфейсу: сервер відповідає помилками цією мовою.
+let apiLang: Lang = "uk";
+export function setApiLang(lang: Lang) {
+  apiLang = lang;
+}
+export function getApiLang(): Lang {
+  return apiLang;
+}
 
 /** Дати після JSON — рядки. */
 type Iso<T> = {
@@ -14,13 +24,23 @@ export type SettingsDTO = Iso<Settings>;
 export type EventDTO = Iso<Event> & { competition: CompetitionDTO | null; attendance: AttendanceDTO[] };
 
 export type Me = {
-  user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
+  user: {
+    id: number;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    language_code?: string;
+  };
   isAdmin: boolean;
+  /** Учасник групи команди: може додавати й редагувати гравців. */
+  isMember: boolean;
   player: PlayerDTO | null;
   startParam: string | null;
   settings: {
     teamName: string;
     timezone: string;
+    language: Lang;
     chatBound: boolean;
     chatTitle: string | null;
     threadId: number | null;
@@ -42,7 +62,7 @@ export async function api<T = unknown>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { "x-lang": apiLang };
   const data = initData();
   if (data) headers.Authorization = `tma ${data}`;
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
@@ -53,7 +73,7 @@ export async function api<T = unknown>(
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
   const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, payload?.error ?? `Помилка ${res.status}`);
+  if (!res.ok) throw new ApiError(res.status, payload?.error ?? dict(apiLang).errors.http(res.status));
   return payload as T;
 }
 

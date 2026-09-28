@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMe } from "@/lib/client/api";
+import { useMe, type ApiError, type Me } from "@/lib/client/api";
 import { tg } from "@/lib/client/tg";
-import { AppCtx } from "./context";
+import { AppCtx, type AppCtxValue } from "./context";
 import EventDetails from "./EventDetails";
+import { LangProvider, LangSwitch, useT } from "./i18n";
 import Manage from "./Manage";
 import Roster from "./Roster";
 import Schedule from "./Schedule";
@@ -14,12 +15,6 @@ type Tab = "schedule" | "roster" | "manage";
 
 export default function App() {
   const { data: me, error, mutate } = useMe();
-  const [tab, setTab] = useState<Tab>("schedule");
-  const [openId, setOpenId] = useState<number | null>(null);
-  // Deep link з треду (t.me/bot?startapp=event_12) відкриває подію один раз, поки її не закрили.
-  const [deepLinkDismissed, setDeepLinkDismissed] = useState(false);
-  const deepLinkId = Number(me?.startParam?.match(/^event_(\d+)$/)?.[1]) || null;
-  const shownId = openId ?? (deepLinkDismissed ? null : deepLinkId);
 
   useEffect(() => {
     const w = tg();
@@ -30,9 +25,36 @@ export default function App() {
     if (w.isVersionAtLeast("7.7")) w.disableVerticalSwipes?.();
   }, []);
 
-  const ctx = useMemo(
-    () => (me ? { me, tz: me.settings.timezone, isAdmin: me.isAdmin, openEvent: setOpenId } : null),
-    [me],
+  return (
+    <LangProvider userCode={me?.user.language_code} teamLang={me?.settings.language ?? "uk"}>
+      <AppBody me={me} error={error} retry={() => mutate()} />
+    </LangProvider>
+  );
+}
+
+function AppBody({ me, error, retry }: { me?: Me; error?: ApiError; retry: () => void }) {
+  const { lang, t } = useT();
+  const [tab, setTab] = useState<Tab>("schedule");
+  const [openId, setOpenId] = useState<number | null>(null);
+  // Deep link з треду (t.me/bot?startapp=event_12) відкриває подію один раз, поки її не закрили.
+  const [deepLinkDismissed, setDeepLinkDismissed] = useState(false);
+  const deepLinkId = Number(me?.startParam?.match(/^event_(\d+)$/)?.[1]) || null;
+  const shownId = openId ?? (deepLinkDismissed ? null : deepLinkId);
+
+  const ctx = useMemo<AppCtxValue | null>(
+    () =>
+      me
+        ? {
+            me,
+            tz: me.settings.timezone,
+            isAdmin: me.isAdmin,
+            canEditPlayers: me.isAdmin || me.isMember,
+            lang,
+            t,
+            openEvent: setOpenId,
+          }
+        : null,
+    [me, lang, t],
   );
 
   const closeEvent = () => {
@@ -44,13 +66,9 @@ export default function App() {
     const unauthorized = error.status === 401;
     return (
       <Gate
-        title={unauthorized ? "Відкрийте через Telegram" : "Не вдалося завантажити"}
-        text={
-          unauthorized
-            ? "Цей застосунок працює всередині Telegram: відкрийте бота й натисніть кнопку «Відкрити застосунок»."
-            : error.message
-        }
-        action={!unauthorized && <Button onClick={() => mutate()}>Спробувати ще раз</Button>}
+        title={unauthorized ? t.gate.openInTelegramTitle : t.gate.loadFailedTitle}
+        text={unauthorized ? t.gate.openInTelegramText : error.message}
+        action={!unauthorized && <Button onClick={retry}>{t.common.retry}</Button>}
       />
     );
   }
@@ -85,6 +103,9 @@ export default function App() {
 function Gate({ title, text, action }: { title: string; text: string; action?: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-8 text-center">
+      <div className="absolute right-4 top-4">
+        <LangSwitch />
+      </div>
       <p className="text-[20px] font-semibold">{title}</p>
       <p className="mt-2 text-[15px] text-hint">{text}</p>
       {action && <div className="mt-5">{action}</div>}
@@ -93,33 +114,34 @@ function Gate({ title, text, action }: { title: string; text: string; action?: R
 }
 
 function TabBar({ tab, setTab, isAdmin }: { tab: Tab; setTab: (t: Tab) => void; isAdmin: boolean }) {
+  const { t } = useT();
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "schedule", label: "Розклад", icon: <CalendarIcon /> },
-    { id: "roster", label: "Склад", icon: <PeopleIcon /> },
+    { id: "schedule", label: t.tabs.schedule, icon: <CalendarIcon /> },
+    { id: "roster", label: t.tabs.roster, icon: <PeopleIcon /> },
   ];
-  if (isAdmin) tabs.push({ id: "manage", label: "Керування", icon: <SlidersIcon /> });
+  if (isAdmin) tabs.push({ id: "manage", label: t.tabs.manage, icon: <SlidersIcon /> });
 
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 border-t border-sep bg-surface"
       style={{ paddingBottom: "var(--safe-bottom)" }}
-      aria-label="Розділи"
+      aria-label={t.tabs.nav}
     >
       <div className="mx-auto flex max-w-lg">
-        {tabs.map((t) => {
-          const active = t.id === tab;
+        {tabs.map((x) => {
+          const active = x.id === tab;
           return (
             <button
-              key={t.id}
+              key={x.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(x.id)}
               aria-current={active ? "page" : undefined}
               className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[12px] font-medium transition-colors ${
                 active ? "text-court" : "text-hint"
               }`}
             >
-              {t.icon}
-              {t.label}
+              {x.icon}
+              {x.label}
             </button>
           );
         })}

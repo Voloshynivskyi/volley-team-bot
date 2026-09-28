@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useEvents, type EventDTO } from "@/lib/client/api";
+import { fmtRound, ucFirst } from "@/lib/i18n";
 import {
   calendarDaysFromToday,
   fmtDayLong,
@@ -11,16 +12,16 @@ import {
   fmtWeekdayShort,
   monthKey,
 } from "@/lib/time";
-import { relativeDays, ucFirst } from "@/lib/text";
 import { useApp } from "./context";
 import EventForm from "./EventForm";
+import { PageHeader } from "./i18n";
 import { Rsvp } from "./Rsvp";
 import { Button, Empty, Fab, Row, Section, Segmented, Spinner } from "./ui";
 
 type Scope = "upcoming" | "past";
 
 export default function Schedule() {
-  const { me, tz, isAdmin, openEvent } = useApp();
+  const { me, tz, lang, t, isAdmin, openEvent } = useApp();
   const [scope, setScope] = useState<Scope>("upcoming");
   const [formOpen, setFormOpen] = useState(false);
   const upcoming = useEvents("upcoming");
@@ -35,17 +36,15 @@ export default function Schedule() {
     for (const e of list ?? []) {
       const d = new Date(e.startsAt);
       const k = monthKey(d, tz);
-      if (!map.has(k)) map.set(k, { title: fmtMonthYear(d, tz), items: [] });
+      if (!map.has(k)) map.set(k, { title: fmtMonthYear(d, tz, lang), items: [] });
       map.get(k)!.items.push(e);
     }
     return [...map.values()];
-  }, [list, tz]);
+  }, [list, tz, lang]);
 
   return (
     <>
-      <header className="px-5 pb-3 pt-5">
-        <h1 className="text-[24px] font-semibold leading-tight">{me.settings.teamName}</h1>
-      </header>
+      <PageHeader title={me.settings.teamName} />
 
       {scope === "upcoming" && next && <NextHero event={next} onOpen={() => openEvent(next.id)} />}
 
@@ -54,8 +53,8 @@ export default function Schedule() {
           value={scope}
           onChange={setScope}
           options={[
-            { value: "upcoming", label: "Майбутні" },
-            { value: "past", label: "Минулі" },
+            { value: "upcoming", label: t.schedule.upcoming },
+            { value: "past", label: t.schedule.past },
           ]}
         />
       </div>
@@ -70,16 +69,22 @@ export default function Schedule() {
         <Section>
           {scope === "upcoming" ? (
             next ? (
-              <Empty title="Далі поки нічого" text="Наступна подія — вгорі. Нові з'являться тут." />
+              <Empty title={t.schedule.nothingMoreTitle} text={t.schedule.nothingMoreText} />
             ) : (
               <Empty
-                title="Розклад порожній"
-                text={isAdmin ? "Додайте першу гру або тренування." : "Адміністратори ще нічого не додали."}
-                action={isAdmin && <Button variant="primary" onClick={() => setFormOpen(true)}>Додати подію</Button>}
+                title={t.schedule.emptyTitle}
+                text={isAdmin ? t.schedule.emptyAdmin : t.schedule.emptyViewer}
+                action={
+                  isAdmin && (
+                    <Button variant="primary" onClick={() => setFormOpen(true)}>
+                      {t.schedule.addEvent}
+                    </Button>
+                  )
+                }
               />
             )
           ) : (
-            <Empty title="Минулих подій немає" text="Зіграні матчі й результати будуть тут." />
+            <Empty title={t.schedule.pastEmptyTitle} text={t.schedule.pastEmptyText} />
           )}
         </Section>
       )}
@@ -88,42 +93,42 @@ export default function Schedule() {
         {groups.map((g) => (
           <Section key={g.title} title={g.title}>
             {g.items.map((e) => (
-              <EventRow key={e.id} event={e} tz={tz} onClick={() => openEvent(e.id)} />
+              <EventRow key={e.id} event={e} onClick={() => openEvent(e.id)} />
             ))}
           </Section>
         ))}
       </div>
 
-      {isAdmin && <Fab label="Подія" onClick={() => setFormOpen(true)} />}
+      {isAdmin && <Fab label={t.schedule.fab} onClick={() => setFormOpen(true)} />}
       <EventForm open={formOpen} onClose={() => setFormOpen(false)} />
     </>
   );
 }
 
 function NextHero({ event: e, onOpen }: { event: EventDTO; onOpen: () => void }) {
-  const { tz } = useApp();
+  const { tz, lang, t } = useApp();
   const d = new Date(e.startsAt);
   const isGame = e.type === "game";
   const days = calendarDaysFromToday(d, tz);
-  const title = isGame ? (e.opponent ?? "Суперник уточнюється") : "Тренування";
-  const sub = isGame ? [e.competition?.name, e.round].filter(Boolean).join(", ") : null;
+  const title = isGame ? (e.opponent ?? t.schedule.opponentTbd) : t.eventTypes.training;
+  const sub = isGame ? [e.competition?.name, fmtRound(t, e.round)].filter(Boolean).join(", ") : null;
   const where = [e.venueName, e.venueAddress].filter(Boolean).join(", ");
-  const side = isGame && e.isHome != null ? (e.isHome ? "дома" : "виїзд") : null;
+  const side = isGame && e.isHome != null ? (e.isHome ? t.schedule.home : t.schedule.away) : null;
 
   return (
     <section className="px-4 pb-2">
       <div className="overflow-hidden rounded-2xl bg-surface">
         <button type="button" onClick={onOpen} className="block w-full px-5 pt-4 text-left active:bg-court-tint">
           <p className="text-[14px] font-medium text-court">
-            {isGame ? "Наступна гра" : "Наступне тренування"}
-            <span className="text-hint"> — {relativeDays(days)}</span>
+            {isGame ? t.schedule.nextGame : t.schedule.nextTraining}
+            <span className="text-hint"> — {t.relDays(days)}</span>
           </p>
           <h2 className="mt-1 font-cond text-[36px] font-bold leading-none tracking-tight">{title}</h2>
           {sub && <p className="mt-1 text-[15px] text-hint">{sub}</p>}
 
           <div className="mt-4 flex items-end justify-between gap-4">
             <div>
-              <p className="text-[15px] text-hint">{ucFirst(fmtDayLong(d, tz))}</p>
+              <p className="text-[15px] text-hint">{ucFirst(fmtDayLong(d, tz, lang))}</p>
               {where && (
                 <p className="mt-0.5 text-[15px]">
                   {where}
@@ -143,14 +148,17 @@ function NextHero({ event: e, onOpen }: { event: EventDTO; onOpen: () => void })
   );
 }
 
-function EventRow({ event: e, tz, onClick }: { event: EventDTO; tz: string; onClick: () => void }) {
+function EventRow({ event: e, onClick }: { event: EventDTO; onClick: () => void }) {
+  const { tz, lang, t } = useApp();
   const d = new Date(e.startsAt);
   const isGame = e.type === "game";
   const cancelled = e.status === "cancelled";
   const finished = e.status === "finished";
-  const title = isGame ? (e.opponent ?? "Суперник уточнюється") : "Тренування";
+  const title = isGame ? (e.opponent ?? t.schedule.opponentTbd) : t.eventTypes.training;
   const sub = isGame
-    ? [e.competition?.name, e.isHome == null ? null : e.isHome ? "дома" : "виїзд", e.venueName].filter(Boolean).join(", ")
+    ? [e.competition?.name, e.isHome == null ? null : e.isHome ? t.schedule.home : t.schedule.away, e.venueName]
+        .filter(Boolean)
+        .join(", ")
     : e.venueName;
   const going = e.attendance.filter((a) => a.status === "going").length;
   const hasScore = finished && e.scoreUs != null && e.scoreThem != null;
@@ -160,7 +168,7 @@ function EventRow({ event: e, tz, onClick }: { event: EventDTO; tz: string; onCl
     <Row onClick={onClick}>
       <div className={`w-11 shrink-0 text-center ${cancelled ? "opacity-40" : ""}`}>
         <div className="numeral text-[28px]">{fmtDayNumber(d, tz)}</div>
-        <div className="text-[12px] text-hint">{fmtWeekdayShort(d, tz)}</div>
+        <div className="text-[12px] text-hint">{fmtWeekdayShort(d, tz, lang)}</div>
       </div>
       <div className="min-w-0 flex-1">
         <p className={`truncate text-[16px] font-medium ${cancelled ? "line-through text-hint" : ""}`}>
@@ -168,7 +176,7 @@ function EventRow({ event: e, tz, onClick }: { event: EventDTO; tz: string; onCl
           {title}
         </p>
         <p className="truncate text-[13px] text-hint">
-          {cancelled ? <span className="text-not">Скасовано</span> : sub || (isGame ? "Гра" : "")}
+          {cancelled ? <span className="text-not">{t.schedule.cancelled}</span> : sub || (isGame ? t.eventTypes.game : "")}
         </p>
       </div>
       <div className="shrink-0 text-right">
@@ -179,7 +187,9 @@ function EventRow({ event: e, tz, onClick }: { event: EventDTO; tz: string; onCl
         ) : (
           <div className={`numeral text-[22px] ${cancelled ? "text-hint" : ""}`}>{fmtTime(d, tz)}</div>
         )}
-        {!cancelled && !finished && going > 0 && <div className="text-[12px] text-going">ідуть {going}</div>}
+        {!cancelled && !finished && going > 0 && (
+          <div className="text-[12px] text-going">{t.schedule.goingCount(going)}</div>
+        )}
       </div>
     </Row>
   );

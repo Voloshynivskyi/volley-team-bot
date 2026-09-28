@@ -16,7 +16,7 @@ export const GET = handle<Ctx>(async (req: NextRequest, ctx) => {
   await requireViewer(req);
   const id = idParam((await ctx.params).id);
   const row = await getEventRow(id);
-  if (!row) throw new HttpError(404, "Подію не знайдено");
+  if (!row) throw new HttpError(404, "eventNotFound");
   return json(row);
 });
 
@@ -36,7 +36,7 @@ export const PATCH = handle<Ctx>(async (req: NextRequest, ctx) => {
   if (rest.scoreUs != null && rest.scoreThem != null && !rest.status) patch.status = "finished";
 
   const [row] = await db.update(schema.events).set(patch).where(eq(schema.events.id, id)).returning();
-  if (!row) throw new HttpError(404, "Подію не знайдено");
+  if (!row) throw new HttpError(404, "eventNotFound");
 
   // Повідомлення в треді мають показувати актуальні дату/місце/статус.
   await refreshEventPosts(id);
@@ -47,6 +47,6 @@ export const DELETE = handle<Ctx>(async (req: NextRequest, ctx) => {
   await requireAdmin(req);
   const id = idParam((await ctx.params).id);
   const [row] = await db.delete(schema.events).where(eq(schema.events.id, id)).returning();
-  if (!row) throw new HttpError(404, "Подію не знайдено");
+  if (!row) throw new HttpError(404, "eventNotFound");
   return json({ ok: true });
 });

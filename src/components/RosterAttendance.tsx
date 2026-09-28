@@ -5,7 +5,8 @@ import { useSWRConfig } from "swr";
 import type { RsvpStatus } from "@/db/schema";
 import { api, EVENTS_UPCOMING_KEY, eventKey, usePlayers, type EventDTO, type PlayerDTO } from "@/lib/client/api";
 import { haptic } from "@/lib/client/tg";
-import { positionShort, RSVP } from "@/lib/positions";
+import { positionShort, RSVP_EMOJI, RSVP_VALUES } from "@/lib/positions";
+import { useApp } from "./context";
 import { errorText, Spinner, useToast } from "./ui";
 
 const ACTIVE: Record<RsvpStatus, string> = {
@@ -16,6 +17,7 @@ const ACTIVE: Record<RsvpStatus, string> = {
 
 /** Блок для адміна: відмітити явку за будь-кого зі складу, навіть без Telegram. */
 export default function RosterAttendance({ event }: { event: EventDTO }) {
+  const { t } = useApp();
   const { data: players, isLoading } = usePlayers();
   const { mutate } = useSWRConfig();
   const toast = useToast();
@@ -59,9 +61,9 @@ export default function RosterAttendance({ event }: { event: EventDTO }) {
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-court-tint"
       >
         <span>
-          <span className="block text-[16px] font-medium">Відмітити за гравців</span>
+          <span className="block text-[16px] font-medium">{t.rosterAttendance.title}</span>
           <span className="block text-[13px] text-hint">
-            {players ? `Відмічено ${marked} з ${players.length}` : "Для тих, хто не в Telegram або забув"}
+            {players ? t.rosterAttendance.marked(marked, players.length) : t.rosterAttendance.subtitle}
           </span>
         </span>
         <span className={`text-hint transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
@@ -76,9 +78,7 @@ export default function RosterAttendance({ event }: { event: EventDTO }) {
       )}
 
       {open && players && players.length === 0 && (
-        <p className="border-t border-sep px-4 py-4 text-[15px] text-hint">
-          У складі ще нікого немає. Додайте гравців у вкладці «Склад».
-        </p>
+        <p className="border-t border-sep px-4 py-4 text-[15px] text-hint">{t.rosterAttendance.empty}</p>
       )}
 
       {open &&
@@ -90,24 +90,24 @@ export default function RosterAttendance({ event }: { event: EventDTO }) {
               <div className="min-w-0 flex-1">
                 <p className="text-[15px] font-medium leading-tight [overflow-wrap:anywhere]">{p.fullName}</p>
                 <p className="text-[12px] text-hint">
-                  {[positionShort(p.position), p.status === "injured" ? "травма" : p.status === "reserve" ? "резерв" : null]
+                  {[positionShort(t, p.position), p.status !== "active" ? t.playerStatusLower[p.status] : null]
                     .filter(Boolean)
                     .join(", ")}
                 </p>
               </div>
               <div className={`flex shrink-0 gap-1 ${pendingId === p.id ? "opacity-50" : ""}`}>
-                {RSVP.map((r) => (
+                {RSVP_VALUES.map((r) => (
                   <button
-                    key={r.value}
+                    key={r}
                     type="button"
-                    onClick={() => set(p, r.value)}
-                    aria-label={`${p.fullName}: ${r.label}`}
-                    aria-pressed={current === r.value}
+                    onClick={() => set(p, r)}
+                    aria-label={`${p.fullName}: ${t.rsvp[r]}`}
+                    aria-pressed={current === r}
                     className={`flex h-10 w-9 items-center justify-center rounded-lg text-[16px] transition-colors ${
-                      current === r.value ? ACTIVE[r.value] : "bg-field border border-sep active:bg-court-tint"
+                      current === r ? ACTIVE[r] : "bg-field border border-sep active:bg-court-tint"
                     }`}
                   >
-                    {r.emoji}
+                    {RSVP_EMOJI[r]}
                   </button>
                 ))}
               </div>

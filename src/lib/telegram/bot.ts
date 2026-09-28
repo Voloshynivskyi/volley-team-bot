@@ -4,15 +4,30 @@ import { db, getSettings, schema } from "@/db";
 import type { RsvpStatus } from "@/db/schema";
 import { env } from "@/lib/env";
 import { linkPlayerByTelegram, listEvents, listPlayers, loadEventBundle, nextScheduledEvent, setRsvp } from "@/lib/events";
-import { rsvpLabel } from "@/lib/positions";
+import { dict, langFromCode, type Lang } from "@/lib/i18n";
+import { RSVP_EMOJI } from "@/lib/positions";
 import { miniAppLink } from "./api";
 import { invalidateAdminCache } from "./admins";
-import { buildEventText, esc, rosterText, rsvpKeyboard, scheduleLine } from "./messages";
+import { buildEventText, esc, rosterText, rsvpKeyboard, scheduleLine, teamLang } from "./messages";
 import { refreshEventPosts } from "./post";
 
 export const bot = new Bot(env.BOT_TOKEN);
 
 const HTML = { parse_mode: "HTML" as const, link_preview_options: { is_disabled: true } };
+
+/**
+ * У групі бот пише мовою команди (повідомлення бачать усі разом),
+ * в особистому чаті — мовою Telegram конкретної людини.
+ */
+async function chatLang(ctx: Context): Promise<Lang> {
+  const team = teamLang(await getSettings());
+  return ctx.chat?.type === "private" ? langFromCode(ctx.from?.language_code, team) : team;
+}
+
+/** Спливаюча підказка після натискання кнопки — особиста, тож мовою людини. */
+async function personalLang(ctx: Context): Promise<Lang> {
+  return langFromCode(ctx.from?.language_code, teamLang(await getSettings()));
+}
 
 async function isGroupAdmin(ctx: Context): Promise<boolean> {
   if (!ctx.from || !ctx.chat) return false;
@@ -26,7 +41,7 @@ async function isGroupAdmin(ctx: Context): Promise<boolean> {
   }
 }
 
-async function openAppKeyboard(ctx: Context, label = "Відкрити застосунок"): Promise<InlineKeyboard | undefined> {
+async function openAppKeyboard(ctx: Context, label: string): Promise<InlineKeyboard | undefined> {
   // web_app-кнопки дозволені тільки в приватних чатах; у групі даємо deep link.
   if (ctx.chat?.type === "private" && env.APP_URL) return new InlineKeyboard().webApp(label, env.APP_URL);
   const link = await miniAppLink();
@@ -35,22 +50,19 @@ async function openAppKeyboard(ctx: Context, label = "Відкрити заст�
 
 bot.command("start", async (ctx) => {
   if (ctx.from) await linkPlayerByTelegram(ctx.from);
-  const s = await getSettings();
-  const kb = await openAppKeyboard(ctx);
-  const intro =
-    `<b>${esc(s.teamName)}</b>\n\n` +
-    "Тут живуть склад команди й розклад ігор.\n" +
-    "Команди: /next — найближча подія, /schedule — розклад, /roster — склад.";
-  await ctx.reply(intro, { ...HTML, reply_markup: kb });
+  const [s, lang] = await Promise.all([getSettings(), chatLang(ctx)]);
+  const t = dict(lang);
+  await ctx.reply(t.bot.intro(esc(s.teamName)), { ...HTML, reply_markup: await openAppKeyboard(ctx, t.bot.openApp) });
 });
 
 bot.command("here", async (ctx) => {
+  const t = dict(await chatLang(ctx));
   if (ctx.chat.type === "private") {
-    await ctx.reply("Цю команду треба надіслати в групі, у тому треді, куди бот має писати анонси.");
+    await ctx.reply(t.bot.hereOnlyGroup);
     return;
   }
   if (!(await isGroupAdmin(ctx))) {
-    await ctx.reply("Прив'язати тред може тільки адміністратор групи.");
+    await ctx.reply(t.bot.hereAdminOnly);
     return;
   }
   const threadId = ctx.msg.is_topic_message ? (ctx.msg.message_thread_id ?? null) : null;
@@ -62,69 +74,76 @@ bot.command("here", async (ctx) => {
       set: { chatId: ctx.chat.id, threadId, chatTitle: ctx.chat.title ?? null, updatedAt: new Date() },
     });
   invalidateAdminCache();
-  await ctx.reply(
-    threadId
-      ? "Готово. Анонси й нагадування писатиму в цей тред."
-      : "Готово. Анонси й нагадування писатиму в цю групу.",
-  );
+  await ctx.reply(threadId ? t.bot.hereDoneThread : t.bot.hereDoneGroup);
 });
 
 bot.command("next", async (ctx) => {
+  const lang = await chatLang(ctx);
+  const t = dict(lang);
   const e = await nextScheduledEvent();
   if (!e) {
-    await ctx.reply("Найближчих подій поки немає.", { reply_markup: await openAppKeyboard(ctx, "Відкрити розклад") });
+    await ctx.reply(t.bot.noUpcoming, { reply_markup: await openAppKeyboard(ctx, t.bot.openSchedule) });
     return;
   }
   const b = await loadEventBundle(e.id);
   if (!b) return;
   const link = await miniAppLink(`event_${e.id}`);
-  await ctx.reply(buildEventText(b), { ...HTML, reply_markup: rsvpKeyboard(e.id, link) });
+  await ctx.reply(buildEventText(b, lang), { ...HTML, reply_markup: rsvpKeyboard(lang, e.id, link) });
 });
 
 bot.command("schedule", async (ctx) => {
+  const lang = await chatLang(ctx);
+  const t = dict(lang);
   const [list, s] = await Promise.all([listEvents("upcoming", 10), getSettings()]);
   if (!list.length) {
-    await ctx.reply("Розклад порожній.", { reply_markup: await openAppKeyboard(ctx, "Відкрити розклад") });
+    await ctx.reply(t.bot.scheduleEmpty, { reply_markup: await openAppKeyboard(ctx, t.bot.openSchedule) });
     return;
   }
-  const text = ["<b>Найближчі події</b>", "", ...list.map((e) => scheduleLine(e, e.competition, s.timezone))].join("\n");
-  await ctx.reply(text, { ...HTML, reply_markup: await openAppKeyboard(ctx, "Повний розклад") });
+  const text = [`<b>${t.bot.upcomingTitle}</b>`, "", ...list.map((e) => scheduleLine(lang, e, e.competition, s.timezone))].join(
+    "\n",
+  );
+  await ctx.reply(text, { ...HTML, reply_markup: await openAppKeyboard(ctx, t.bot.fullSchedule) });
 });
 
 bot.command("roster", async (ctx) => {
+  const lang = await chatLang(ctx);
   const [players, s] = await Promise.all([listPlayers(), getSettings()]);
-  await ctx.reply(rosterText(players, s.teamName), { ...HTML, reply_markup: await openAppKeyboard(ctx, "Відкрити склад") });
+  await ctx.reply(rosterText(lang, players, s.teamName), {
+    ...HTML,
+    reply_markup: await openAppKeyboard(ctx, dict(lang).bot.openRoster),
+  });
 });
 
 bot.callbackQuery(/^rsvp:(\d+):(going|maybe|not_going)$/, async (ctx) => {
   const eventId = Number(ctx.match[1]);
   const status = ctx.match[2] as RsvpStatus;
+  const t = dict(await personalLang(ctx));
 
   const event = await db.query.events.findFirst({ where: eq(schema.events.id, eventId) });
   if (!event || event.status !== "scheduled") {
-    await ctx.answerCallbackQuery({ text: "Ця подія вже неактуальна." });
+    await ctx.answerCallbackQuery({ text: t.bot.eventInactive });
     return;
   }
 
   await setRsvp(eventId, ctx.from, status);
   const posts = await refreshEventPosts(eventId);
 
-  // Повідомлення від /next не записане в posts — оновлюємо його окремо.
+  // Повідомлення від /next не записане в posts — оновлюємо його окремо, мовою того чату.
   const msgId = ctx.msg?.message_id;
   if (msgId && !posts.some((p) => p.messageId === msgId)) {
     const b = await loadEventBundle(eventId);
     if (b) {
+      const lang = await chatLang(ctx);
       const link = await miniAppLink(`event_${eventId}`);
       try {
-        await ctx.editMessageText(buildEventText(b), { ...HTML, reply_markup: rsvpKeyboard(eventId, link) });
+        await ctx.editMessageText(buildEventText(b, lang), { ...HTML, reply_markup: rsvpKeyboard(lang, eventId, link) });
       } catch (err) {
         if (!/message is not modified/i.test(String(err))) throw err;
       }
     }
   }
 
-  const { emoji, label } = rsvpLabel(status);
-  await ctx.answerCallbackQuery({ text: `${emoji} Записав: ${label.toLowerCase()}` });
+  await ctx.answerCallbackQuery({ text: `${RSVP_EMOJI[status]} ${t.bot.recorded(t.rsvp[status].toLowerCase())}` });
 });
 
 bot.on("callback_query:data", (ctx) => ctx.answerCallbackQuery());
