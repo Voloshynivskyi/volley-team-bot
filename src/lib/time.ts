@@ -1,7 +1,10 @@
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { uk } from "date-fns/locale";
+import { enGB, ru, uk, type Locale } from "date-fns/locale";
+import type { Lang } from "@/lib/i18n";
 
 export const DEFAULT_TZ = "Europe/Kyiv";
+
+const LOCALES: Record<Lang, Locale> = { uk, ru, en: enGB };
 
 /** "2026-10-04T19:00" (значення datetime-local) у зоні команди → Date (UTC). */
 export function localInputToDate(value: string, tz: string): Date {
@@ -17,27 +20,27 @@ export function fmtTime(date: Date, tz: string) {
   return formatInTimeZone(date, tz, "HH:mm");
 }
 
-/** "субота, 4 жовтня" */
-export function fmtDayLong(date: Date, tz: string) {
-  return formatInTimeZone(date, tz, "EEEE, d MMMM", { locale: uk });
+/** "субота, 4 жовтня" / "суббота, 4 октября" / "Saturday, 4 October" */
+export function fmtDayLong(date: Date, tz: string, lang: Lang) {
+  return formatInTimeZone(date, tz, "EEEE, d MMMM", { locale: LOCALES[lang] });
 }
 
 /** "сб, 4 жовт." */
-export function fmtDayShort(date: Date, tz: string) {
-  return formatInTimeZone(date, tz, "EEEEEE, d MMM", { locale: uk });
+export function fmtDayShort(date: Date, tz: string, lang: Lang) {
+  return formatInTimeZone(date, tz, "EEEEEE, d MMM", { locale: LOCALES[lang] });
 }
 
 export function fmtDayNumber(date: Date, tz: string) {
   return formatInTimeZone(date, tz, "d");
 }
 
-export function fmtWeekdayShort(date: Date, tz: string) {
-  return formatInTimeZone(date, tz, "EEEEEE", { locale: uk });
+export function fmtWeekdayShort(date: Date, tz: string, lang: Lang) {
+  return formatInTimeZone(date, tz, "EEEEEE", { locale: LOCALES[lang] });
 }
 
 /** "жовтень 2026" — заголовок групи в розкладі */
-export function fmtMonthYear(date: Date, tz: string) {
-  return formatInTimeZone(date, tz, "LLLL yyyy", { locale: uk });
+export function fmtMonthYear(date: Date, tz: string, lang: Lang) {
+  return formatInTimeZone(date, tz, "LLLL yyyy", { locale: LOCALES[lang] });
 }
 
 export function monthKey(date: Date, tz: string) {
@@ -45,8 +48,8 @@ export function monthKey(date: Date, tz: string) {
 }
 
 /** "субота, 4 жовтня, 19:00" — для повідомлень бота */
-export function fmtDateTimeLong(date: Date, tz: string) {
-  return `${fmtDayLong(date, tz)}, ${fmtTime(date, tz)}`;
+export function fmtDateTimeLong(date: Date, tz: string, lang: Lang) {
+  return `${fmtDayLong(date, tz, lang)}, ${fmtTime(date, tz)}`;
 }
 
 export function hoursUntil(date: Date, now = new Date()) {

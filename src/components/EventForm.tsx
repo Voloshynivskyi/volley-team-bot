@@ -5,7 +5,7 @@ import { useSWRConfig } from "swr";
 import type { EventType } from "@/db/schema";
 import { api, isEventsKey, useCompetitions, useEvents, type EventDTO } from "@/lib/client/api";
 import { haptic } from "@/lib/client/tg";
-import { EVENT_TYPES } from "@/lib/positions";
+import { EVENT_TYPE_VALUES, options } from "@/lib/positions";
 import { dateToLocalInput, defaultNewEventInput } from "@/lib/time";
 import { useApp } from "./context";
 import { Button, errorText, Field, Input, Segmented, Select, Sheet, Textarea, Toggle, useToast } from "./ui";
@@ -81,7 +81,7 @@ function defaults(all: EventDTO[], tz: string, chatBound: boolean): Form {
 }
 
 function EventFormInner({ onClose, event }: { onClose: () => void; event: EventDTO | null }) {
-  const { tz, me } = useApp();
+  const { tz, me, t } = useApp();
   const toast = useToast();
   const { mutate } = useSWRConfig();
   const competitions = useCompetitions();
@@ -127,11 +127,11 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
 
   async function submit() {
     if (!f.startsAtLocal) {
-      toast("Вкажіть дату й час", "error");
+      toast(t.eventForm.errDate, "error");
       return;
     }
     if (isGame && f.competitionId === NEW && !f.newCompetition.trim()) {
-      toast("Вкажіть назву нової ліги", "error");
+      toast(t.eventForm.errNewCompetition, "error");
       return;
     }
     setSaving(true);
@@ -164,9 +164,9 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
         : await api<EventDTO & { announced: string | null }>("/api/events", { method: "POST", body });
       await mutate(isEventsKey);
       haptic("success");
-      if (isEdit) toast("Зміни збережено");
-      else if ("announced" in saved && saved.announced === "sent") toast("Додано й анонсовано в треді");
-      else toast("Подію додано");
+      if (isEdit) toast(t.common.changesSaved);
+      else if ("announced" in saved && saved.announced === "sent") toast(t.eventForm.addedAnnounced);
+      else toast(t.eventForm.added);
       onClose();
     } catch (err) {
       toast(errorText(err), "error");
@@ -180,17 +180,17 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
     <Sheet
       open
       onClose={onClose}
-      title={isEdit ? "Редагувати подію" : "Нова подія"}
+      title={isEdit ? t.eventForm.titleEdit : t.eventForm.titleNew}
       footer={
         <Button variant="primary" size="lg" block onClick={submit} loading={saving}>
-          {isEdit ? "Зберегти зміни" : isGame ? "Додати гру" : "Додати тренування"}
+          {isEdit ? t.common.saveChanges : isGame ? t.eventForm.addGame : t.eventForm.addTraining}
         </Button>
       }
     >
       <div className="space-y-4 pb-2">
-        <Segmented value={f.type} onChange={(v) => set("type", v)} options={EVENT_TYPES} />
+        <Segmented value={f.type} onChange={(v) => set("type", v)} options={options(EVENT_TYPE_VALUES, t.eventTypes)} />
 
-        <Field label="Дата й час">
+        <Field label={t.eventForm.dateTime}>
           <Input
             type="datetime-local"
             value={f.startsAtLocal}
@@ -201,12 +201,12 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
 
         {isGame && (
           <>
-            <Field label="Суперник">
+            <Field label={t.eventForm.opponent}>
               <Input
                 list="opponents"
                 value={f.opponent}
                 onChange={(e) => set("opponent", e.target.value)}
-                placeholder="Назва команди"
+                placeholder={t.eventForm.opponentPh}
                 autoComplete="off"
               />
               <datalist id="opponents">
@@ -216,40 +216,40 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
               </datalist>
             </Field>
 
-            <Field label="Ліга або турнір">
+            <Field label={t.eventForm.competition}>
               <Select value={f.competitionId} onChange={(e) => set("competitionId", e.target.value)}>
-                <option value="">Без ліги</option>
+                <option value="">{t.eventForm.noCompetition}</option>
                 {(competitions.data ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                     {c.season ? ` (${c.season})` : ""}
                   </option>
                 ))}
-                <option value={NEW}>+ Нова ліга…</option>
+                <option value={NEW}>{t.eventForm.newCompetition}</option>
               </Select>
               {f.competitionId === NEW && (
                 <Input
                   className="mt-2"
                   value={f.newCompetition}
                   onChange={(e) => set("newCompetition", e.target.value)}
-                  placeholder="Назва ліги"
+                  placeholder={t.eventForm.newCompetitionPh}
                   autoFocus
                 />
               )}
             </Field>
 
-            <Field label="Тур або етап">
-              <Input value={f.round} onChange={(e) => set("round", e.target.value)} placeholder="3 тур" />
+            <Field label={t.eventForm.round}>
+              <Input value={f.round} onChange={(e) => set("round", e.target.value)} placeholder={t.eventForm.roundPh} />
             </Field>
           </>
         )}
 
-        <Field label="Зал">
+        <Field label={t.eventForm.venue}>
           <Input
             list="venues"
             value={f.venueName}
             onChange={(e) => pickVenue(e.target.value)}
-            placeholder="Назва залу"
+            placeholder={t.eventForm.venuePh}
             autoComplete="off"
           />
           <datalist id="venues">
@@ -259,17 +259,21 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
           </datalist>
         </Field>
 
-        <Field label="Адреса">
-          <Input value={f.venueAddress} onChange={(e) => set("venueAddress", e.target.value)} placeholder="Місто, вулиця" />
+        <Field label={t.eventForm.address}>
+          <Input
+            value={f.venueAddress}
+            onChange={(e) => set("venueAddress", e.target.value)}
+            placeholder={t.eventForm.addressPh}
+          />
         </Field>
 
         {!more ? (
           <button type="button" onClick={() => setMore(true)} className="text-[15px] font-medium text-court">
-            Більше: мапа, форма, нотатка, дома чи виїзд
+            {t.eventForm.more}
           </button>
         ) : (
           <>
-            <Field label="Посилання на мапу">
+            <Field label={t.eventForm.mapUrl}>
               <Input
                 type="url"
                 inputMode="url"
@@ -278,21 +282,21 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
                 placeholder="https://maps.google.com/…"
               />
             </Field>
-            <Field label="Форма">
-              <Input value={f.kit} onChange={(e) => set("kit", e.target.value)} placeholder="Світла / темна" />
+            <Field label={t.eventForm.kit}>
+              <Input value={f.kit} onChange={(e) => set("kit", e.target.value)} placeholder={t.eventForm.kitPh} />
             </Field>
-            <Field label="Нотатка">
-              <Textarea value={f.note} onChange={(e) => set("note", e.target.value)} placeholder="Збір за 40 хв до початку" />
+            <Field label={t.eventForm.note}>
+              <Textarea value={f.note} onChange={(e) => set("note", e.target.value)} placeholder={t.eventForm.notePh} />
             </Field>
             {isGame && (
-              <Field label="Дома чи виїзд" hint="Якщо всі грають на нейтральному майданчику — залиште «Не вказано».">
+              <Field label={t.eventForm.homeAway} hint={t.eventForm.homeAwayHint}>
                 <Segmented
                   value={f.isHome}
                   onChange={(v) => set("isHome", v)}
                   options={[
-                    { value: "none", label: "Не вказано" },
-                    { value: "home", label: "Дома" },
-                    { value: "away", label: "Виїзд" },
+                    { value: "none", label: t.common.notSet },
+                    { value: "home", label: t.eventForm.home },
+                    { value: "away", label: t.eventForm.away },
                   ]}
                 />
               </Field>
@@ -304,8 +308,8 @@ function EventFormInner({ onClose, event }: { onClose: () => void; event: EventD
           <Toggle
             checked={f.announceNow}
             onChange={(v) => set("announceNow", v)}
-            label="Одразу написати анонс у тред"
-            hint="Інакше бот анонсує сам за кілька днів до події"
+            label={t.eventForm.announceNow}
+            hint={t.eventForm.announceNowHint}
           />
         )}
       </div>

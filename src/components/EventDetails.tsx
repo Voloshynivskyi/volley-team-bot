@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { api, isEventsKey, useEvent, type EventDTO } from "@/lib/client/api";
 import { confirmDialog, haptic, openLink } from "@/lib/client/tg";
+import { fmtRound, ucFirst } from "@/lib/i18n";
+import { RSVP_VALUES } from "@/lib/positions";
 import { fmtDayLong, fmtTime } from "@/lib/time";
-import { ucFirst } from "@/lib/text";
 import { useApp } from "./context";
 import EventForm from "./EventForm";
 import { isMine, Rsvp } from "./Rsvp";
@@ -13,7 +14,7 @@ import RosterAttendance from "./RosterAttendance";
 import { Button, errorText, Input, Sheet, Spinner, useToast } from "./ui";
 
 export default function EventDetails({ id, onClose }: { id: number | null; onClose: () => void }) {
-  const { tz, isAdmin, me } = useApp();
+  const { isAdmin, me, t } = useApp();
   const { data: e, error, isLoading } = useEvent(id);
   const { mutate } = useSWRConfig();
   const toast = useToast();
@@ -46,23 +47,23 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
     run("status", async () => {
       await api(`/api/events/${id}`, { method: "PATCH", body: { status } });
       await refresh();
-      toast(status === "cancelled" ? "Подію скасовано" : "Подію відновлено");
+      toast(status === "cancelled" ? t.event.cancelledToast : t.event.restoredToast);
     });
 
   const remove = async () => {
-    if (!(await confirmDialog("Видалити подію разом із явкою? Повідомлення в треді залишаться."))) return;
+    if (!(await confirmDialog(t.event.deleteConfirm))) return;
     await run("delete", async () => {
       await api(`/api/events/${id}`, { method: "DELETE" });
       await refresh();
-      toast("Подію видалено");
+      toast(t.event.deletedToast);
       onClose();
     });
   };
 
-  const title = !e ? "" : e.type === "game" ? (e.opponent ?? "Суперник уточнюється") : "Тренування";
+  const title = !e ? "" : e.type === "game" ? (e.opponent ?? t.schedule.opponentTbd) : t.eventTypes.training;
 
   return (
-    <Sheet open={id != null} onClose={onClose} title={e ? (e.type === "game" ? "Гра" : "Тренування") : "Подія"}>
+    <Sheet open={id != null} onClose={onClose} title={e ? t.eventTypes[e.type] : t.event.sheetTitle}>
       {isLoading && (
         <div className="flex justify-center py-10 text-hint">
           <Spinner />
@@ -74,20 +75,22 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
         <div className="space-y-5 pb-2">
           <div>
             {e.type === "game" && (e.competition || e.round) && (
-              <p className="text-[15px] text-hint">{[e.competition?.name, e.round].filter(Boolean).join(", ")}</p>
+              <p className="text-[15px] text-hint">
+                {[e.competition?.name, fmtRound(t, e.round)].filter(Boolean).join(", ")}
+              </p>
             )}
             <h3 className="font-cond text-[40px] font-bold leading-none tracking-tight">{title}</h3>
-            {e.status === "cancelled" && <p className="mt-2 font-medium text-not">Скасовано</p>}
+            {e.status === "cancelled" && <p className="mt-2 font-medium text-not">{t.schedule.cancelled}</p>}
           </div>
 
-          <DateBlock event={e} tz={tz} />
+          <DateBlock event={e} />
 
           {e.status === "finished" && e.scoreUs != null && e.scoreThem != null && (
             <div className="rounded-2xl bg-surface p-4 text-center">
               <p className={`numeral text-[48px] ${e.scoreUs > e.scoreThem ? "text-going" : "text-not"}`}>
                 {e.scoreUs}:{e.scoreThem}
               </p>
-              <p className="mt-1 text-[15px] text-hint">{e.scoreUs > e.scoreThem ? "Перемога" : "Поразка"}</p>
+              <p className="mt-1 text-[15px] text-hint">{e.scoreUs > e.scoreThem ? t.event.win : t.event.loss}</p>
             </div>
           )}
 
@@ -104,36 +107,34 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
 
           {isAdmin && (
             <div className="space-y-2">
-              <p className="px-1 text-[14px] font-medium text-hint">Керування</p>
+              <p className="px-1 text-[14px] font-medium text-hint">{t.event.manage}</p>
               <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => setEditOpen(true)}>Редагувати</Button>
+                <Button onClick={() => setEditOpen(true)}>{t.event.edit}</Button>
                 {e.status === "scheduled" && (
                   <Button onClick={announce} loading={busy === "announce"} disabled={!me.settings.chatBound}>
-                    Анонс у тред
+                    {t.event.announce}
                   </Button>
                 )}
                 {e.type === "game" && e.status !== "cancelled" && (
                   <Button onClick={() => setResultOpen((v) => !v)}>
-                    {e.status === "finished" ? "Змінити рахунок" : "Записати рахунок"}
+                    {e.status === "finished" ? t.event.changeScore : t.event.setScore}
                   </Button>
                 )}
                 {e.status === "cancelled" ? (
                   <Button onClick={() => setStatus("scheduled")} loading={busy === "status"}>
-                    Відновити
+                    {t.event.restore}
                   </Button>
                 ) : (
                   <Button variant="ghost" onClick={() => setStatus("cancelled")} loading={busy === "status"}>
-                    Скасувати подію
+                    {t.event.cancelEvent}
                   </Button>
                 )}
                 <Button variant="danger" onClick={remove} loading={busy === "delete"}>
-                  Видалити
+                  {t.common.delete}
                 </Button>
               </div>
               {!me.settings.chatBound && e.status === "scheduled" && (
-                <p className="px-1 text-[13px] text-hint">
-                  Щоб анонсувати, додайте бота в групу й надішліть /here у потрібному треді.
-                </p>
+                <p className="px-1 text-[13px] text-hint">{t.event.announceHint}</p>
               )}
               {resultOpen && (
                 <ResultForm
@@ -154,12 +155,13 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
   );
 }
 
-function DateBlock({ event: e, tz }: { event: EventDTO; tz: string }) {
+function DateBlock({ event: e }: { event: EventDTO }) {
+  const { tz, lang } = useApp();
   const d = new Date(e.startsAt);
   return (
     <div className="flex items-end justify-between gap-4 rounded-2xl bg-surface px-4 py-3">
       <div>
-        <p className="text-[17px] font-medium">{ucFirst(fmtDayLong(d, tz))}</p>
+        <p className="text-[17px] font-medium">{ucFirst(fmtDayLong(d, tz, lang))}</p>
         <p className="text-[14px] text-hint">{d.getFullYear()}</p>
       </div>
       <p className="numeral text-[44px]">{fmtTime(d, tz)}</p>
@@ -168,9 +170,10 @@ function DateBlock({ event: e, tz }: { event: EventDTO; tz: string }) {
 }
 
 function InfoList({ event: e }: { event: EventDTO }) {
+  const { t } = useApp();
   const rows: { icon: string; text: string; onClick?: () => void }[] = [];
   const where = [e.venueName, e.venueAddress].filter(Boolean).join(", ");
-  const side = e.type === "game" && e.isHome != null ? (e.isHome ? "дома" : "виїзд") : null;
+  const side = e.type === "game" && e.isHome != null ? (e.isHome ? t.schedule.home : t.schedule.away) : null;
   if (where || side) {
     rows.push({
       icon: "📍",
@@ -181,7 +184,7 @@ function InfoList({ event: e }: { event: EventDTO }) {
   if (e.kit) rows.push({ icon: "👕", text: e.kit });
   if (e.note) rows.push({ icon: "📝", text: e.note });
   if (e.competition?.standingsUrl) {
-    rows.push({ icon: "📊", text: "Таблиця ліги", onClick: () => openLink(e.competition!.standingsUrl!) });
+    rows.push({ icon: "📊", text: t.event.standings, onClick: () => openLink(e.competition!.standingsUrl!) });
   }
   if (!rows.length) return null;
   return (
@@ -219,22 +222,18 @@ function AttendanceLists({
   myId: number;
   myPlayerId: number | null;
 }) {
-  const groups = [
-    { key: "going", title: "Ідуть", cls: "text-going" },
-    { key: "maybe", title: "Можливо", cls: "text-maybe" },
-    { key: "not_going", title: "Не йдуть", cls: "text-not" },
-  ] as const;
-  const any = e.attendance.length > 0;
-  if (!any) return <p className="mt-3 text-[14px] text-hint">Ніхто ще не відмітився. Будьте першим.</p>;
+  const { t } = useApp();
+  const tone = { going: "text-going", maybe: "text-maybe", not_going: "text-not" } as const;
+  if (!e.attendance.length) return <p className="mt-3 text-[14px] text-hint">{t.event.nobodyBeFirst}</p>;
   return (
     <div className="mt-4 space-y-3">
-      {groups.map((g) => {
-        const list = e.attendance.filter((a) => a.status === g.key);
+      {RSVP_VALUES.map((status) => {
+        const list = e.attendance.filter((a) => a.status === status);
         if (!list.length) return null;
         return (
-          <div key={g.key}>
-            <p className={`text-[14px] font-medium ${g.cls}`}>
-              {g.title} <span className="numeral text-[16px]">{list.length}</span>
+          <div key={status}>
+            <p className={`text-[14px] font-medium ${tone[status]}`}>
+              {t.rsvpGroups[status]} <span className="numeral text-[16px]">{list.length}</span>
             </p>
             <p className="mt-0.5 text-[15px] leading-relaxed">
               {list.map((a, i) => (
@@ -252,6 +251,7 @@ function AttendanceLists({
 }
 
 function ResultForm({ event: e, onDone }: { event: EventDTO; onDone: () => Promise<void> }) {
+  const { t } = useApp();
   const toast = useToast();
   const [us, setUs] = useState(e.scoreUs != null ? String(e.scoreUs) : "");
   const [them, setThem] = useState(e.scoreThem != null ? String(e.scoreThem) : "");
@@ -261,13 +261,13 @@ function ResultForm({ event: e, onDone }: { event: EventDTO; onDone: () => Promi
     const a = Number(us);
     const b = Number(them);
     if (!Number.isInteger(a) || !Number.isInteger(b) || us === "" || them === "") {
-      toast("Вкажіть рахунок по сетах, напр. 3 і 1", "error");
+      toast(t.event.scoreInvalid, "error");
       return;
     }
     setSaving(true);
     try {
       await api(`/api/events/${e.id}`, { method: "PATCH", body: { scoreUs: a, scoreThem: b, status: "finished" } });
-      toast("Рахунок збережено");
+      toast(t.event.scoreSaved);
       await onDone();
     } catch (err) {
       toast(errorText(err), "error");
@@ -278,20 +278,20 @@ function ResultForm({ event: e, onDone }: { event: EventDTO; onDone: () => Promi
 
   return (
     <div className="rounded-2xl bg-surface p-4">
-      <p className="mb-3 text-[14px] text-hint">Рахунок по сетах</p>
+      <p className="mb-3 text-[14px] text-hint">{t.event.scoreTitle}</p>
       <div className="flex items-center gap-3">
         <div className="flex-1">
-          <span className="mb-1 block text-[13px] text-hint">Ми</span>
+          <span className="mb-1 block text-[13px] text-hint">{t.event.us}</span>
           <Input inputMode="numeric" pattern="[0-9]*" maxLength={1} value={us} onChange={(ev) => setUs(ev.target.value)} className="numeral text-center text-[24px]" />
         </div>
         <span className="numeral pt-5 text-[28px] text-hint">:</span>
         <div className="flex-1">
-          <span className="mb-1 block text-[13px] text-hint">{e.opponent ?? "Суперник"}</span>
+          <span className="mb-1 block text-[13px] text-hint">{e.opponent ?? t.event.opponent}</span>
           <Input inputMode="numeric" pattern="[0-9]*" maxLength={1} value={them} onChange={(ev) => setThem(ev.target.value)} className="numeral text-center text-[24px]" />
         </div>
       </div>
       <Button variant="primary" block className="mt-3" onClick={save} loading={saving}>
-        Зберегти рахунок
+        {t.event.saveScore}
       </Button>
     </div>
   );

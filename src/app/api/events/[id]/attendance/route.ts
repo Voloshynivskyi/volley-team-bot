@@ -18,12 +18,12 @@ export const POST = handle<Ctx>(async (req: NextRequest, ctx) => {
   const { playerId, status } = await parseBody(req, playerRsvpInput);
 
   const event = await db.query.events.findFirst({ where: eq(schema.events.id, id) });
-  if (!event) throw new HttpError(404, "Подію не знайдено");
+  if (!event) throw new HttpError(404, "eventNotFound");
 
   try {
     await setPlayerRsvp(id, playerId, status);
   } catch (err) {
-    if (err instanceof Error && err.message === "PLAYER_NOT_FOUND") throw new HttpError(404, "Гравця не знайдено");
+    if (err instanceof Error && err.message === "PLAYER_NOT_FOUND") throw new HttpError(404, "playerNotFound");
     throw err;
   }
   await refreshEventPosts(id);

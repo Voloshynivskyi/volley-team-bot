@@ -14,7 +14,7 @@ export const PATCH = handle<Ctx>(async (req: NextRequest, ctx) => {
   const id = idParam((await ctx.params).id);
   const input = await parseBody(req, competitionPatch);
   const [row] = await db.update(schema.competitions).set(input).where(eq(schema.competitions.id, id)).returning();
-  if (!row) throw new HttpError(404, "Лігу не знайдено");
+  if (!row) throw new HttpError(404, "competitionNotFound");
   return json(row);
 });
 
@@ -23,6 +23,6 @@ export const DELETE = handle<Ctx>(async (req: NextRequest, ctx) => {
   const id = idParam((await ctx.params).id);
   // Події лишаються, у них просто зникає ліга (FK on delete set null).
   const [row] = await db.delete(schema.competitions).where(eq(schema.competitions.id, id)).returning();
-  if (!row) throw new HttpError(404, "Лігу не знайдено");
+  if (!row) throw new HttpError(404, "competitionNotFound");
   return json({ ok: true });
 });

@@ -5,39 +5,38 @@ import { useSWRConfig } from "swr";
 import type { CompetitionType } from "@/db/schema";
 import { api, useCompetitions, useSettings, type CompetitionDTO, type SettingsDTO } from "@/lib/client/api";
 import { confirmDialog, haptic } from "@/lib/client/tg";
-import { COMPETITION_TYPES } from "@/lib/positions";
+import { isLang, LANGS, type Lang } from "@/lib/i18n";
+import { COMPETITION_TYPE_VALUES, options } from "@/lib/positions";
 import { useApp } from "./context";
+import { PageHeader } from "./i18n";
 import { Button, errorText, Field, Input, Row, Section, Segmented, Sheet, Spinner, Toggle, useToast } from "./ui";
 
 export default function Manage() {
-  const { me } = useApp();
+  const { me, t } = useApp();
   return (
     <>
-      <header className="px-5 pb-3 pt-5">
-        <h1 className="text-[24px] font-semibold leading-tight">Керування</h1>
-        <p className="text-[15px] text-hint">Ви адміністратор — можете редагувати все.</p>
-      </header>
+      <PageHeader title={t.manage.title} subtitle={t.manage.subtitle} />
       <div className="space-y-6">
         <GroupSection />
         <CompetitionsSection />
         <SettingsSection />
-        <Section title="Команди бота в чаті">
+        <Section title={t.manage.botCommands}>
           <div className="space-y-2 px-4 py-3 text-[15px]">
             <p>
-              <code className="text-court">/next</code> — найближча подія з кнопками явки
+              <code className="text-court">/next</code> — {t.manage.cmdNext}
             </p>
             <p>
-              <code className="text-court">/schedule</code> — найближчі 10 подій
+              <code className="text-court">/schedule</code> — {t.manage.cmdSchedule}
             </p>
             <p>
-              <code className="text-court">/roster</code> — склад
+              <code className="text-court">/roster</code> — {t.manage.cmdRoster}
             </p>
             <p>
-              <code className="text-court">/here</code> — прив’язати тред для анонсів (у групі)
+              <code className="text-court">/here</code> — {t.manage.cmdHere}
             </p>
             {me.settings.chatBound && (
               <p className="pt-1 text-hint">
-                Анонс — за {me.settings.announceDaysBefore} дн. до події, нагадування — за {me.settings.reminderHours} год.
+                {t.manage.scheduleInfo(me.settings.announceDaysBefore, me.settings.reminderHours.split(",").map((h) => h.trim()).join(", "))}
               </p>
             )}
           </div>
@@ -48,19 +47,19 @@ export default function Manage() {
 }
 
 function GroupSection() {
-  const { me } = useApp();
+  const { me, t } = useApp();
   const { mutate } = useSWRConfig();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const s = me.settings;
 
   async function unbind() {
-    if (!(await confirmDialog("Відв'язати групу? Бот перестане писати анонси, поки не отримає /here знову."))) return;
+    if (!(await confirmDialog(t.manage.unbindConfirm))) return;
     setBusy(true);
     try {
       await api("/api/settings", { method: "DELETE" });
       await mutate("/api/me");
-      toast("Групу відв'язано");
+      toast(t.manage.unbound);
     } catch (err) {
       toast(errorText(err), "error");
     } finally {
@@ -69,22 +68,22 @@ function GroupSection() {
   }
 
   return (
-    <Section title="Група для анонсів">
+    <Section title={t.manage.group}>
       <div className="px-4 py-3">
         {s.chatBound ? (
           <>
-            <p className="text-[16px] font-medium">{s.chatTitle ?? "Група прив’язана"}</p>
-            <p className="text-[14px] text-hint">{s.threadId ? "Пише в окремий тред" : "Пише в загальний чат групи"}</p>
+            <p className="text-[16px] font-medium">{s.chatTitle ?? t.manage.groupBound}</p>
+            <p className="text-[14px] text-hint">{s.threadId ? t.manage.writesThread : t.manage.writesGroup}</p>
             <Button variant="ghost" className="mt-2 -ml-4" onClick={unbind} loading={busy}>
-              Відв’язати
+              {t.manage.unbind}
             </Button>
           </>
         ) : (
           <ol className="list-decimal space-y-1 pl-5 text-[15px]">
-            <li>Додайте бота в групу команди і зробіть його адміністратором.</li>
-            <li>Відкрийте тред, куди мають приходити анонси.</li>
+            <li>{t.manage.step1}</li>
+            <li>{t.manage.step2}</li>
             <li>
-              Надішліть там <code className="text-court">/here</code>.
+              {t.manage.step3} <code className="text-court">/here</code>.
             </li>
           </ol>
         )}
@@ -94,6 +93,7 @@ function GroupSection() {
 }
 
 function CompetitionsSection() {
+  const { t } = useApp();
   const { data, isLoading } = useCompetitions(true);
   const [editing, setEditing] = useState<CompetitionDTO | null | "new">(null);
   const active = (data ?? []).filter((c) => !c.isArchived);
@@ -102,10 +102,10 @@ function CompetitionsSection() {
   return (
     <>
       <Section
-        title="Ліги й турніри"
+        title={t.manage.competitions}
         action={
           <button type="button" onClick={() => setEditing("new")} className="text-[15px] font-medium text-court">
-            + Додати
+            {t.manage.addShort}
           </button>
         }
       >
@@ -115,7 +115,7 @@ function CompetitionsSection() {
           </div>
         )}
         {!isLoading && !data?.length && (
-          <p className="px-4 py-4 text-[15px] text-hint">Поки немає. Додайте лігу, щоб обирати її при створенні гри.</p>
+          <p className="px-4 py-4 text-[15px] text-hint">{t.manage.competitionsEmpty}</p>
         )}
         {active.map((c) => (
           <CompetitionRow key={c.id} c={c} onClick={() => setEditing(c)} />
@@ -132,12 +132,13 @@ function CompetitionsSection() {
 }
 
 function CompetitionRow({ c, onClick, muted }: { c: CompetitionDTO; onClick: () => void; muted?: boolean }) {
-  const type = COMPETITION_TYPES.find((t) => t.value === c.type)?.label ?? "";
+  const { t } = useApp();
+  const type = t.competitionTypes[c.type];
   return (
     <Row onClick={onClick} className={muted ? "opacity-50" : ""}>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[16px] font-medium">{c.name}</p>
-        <p className="text-[13px] text-hint">{[type, c.season, muted ? "в архіві" : null].filter(Boolean).join(", ")}</p>
+        <p className="text-[13px] text-hint">{[type, c.season, muted ? t.manage.archivedLower : null].filter(Boolean).join(", ")}</p>
       </div>
       <span className="text-hint" aria-hidden>
         ›
@@ -147,6 +148,7 @@ function CompetitionRow({ c, onClick, muted }: { c: CompetitionDTO; onClick: () 
 }
 
 function CompetitionForm({ onClose, competition }: { onClose: () => void; competition: CompetitionDTO | null }) {
+  const { t } = useApp();
   const toast = useToast();
   const { mutate } = useSWRConfig();
   const [name, setName] = useState(competition?.name ?? "");
@@ -160,7 +162,7 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
 
   async function submit() {
     if (!name.trim()) {
-      toast("Вкажіть назву", "error");
+      toast(t.manage.errName, "error");
       return;
     }
     setSaving(true);
@@ -170,7 +172,7 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
       else await api("/api/competitions", { method: "POST", body });
       await refresh();
       haptic("success");
-      toast(competition ? "Збережено" : "Лігу додано");
+      toast(competition ? t.common.saved : t.manage.compAdded);
       onClose();
     } catch (err) {
       toast(errorText(err), "error");
@@ -181,12 +183,12 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
 
   async function remove() {
     if (!competition) return;
-    if (!(await confirmDialog(`Видалити «${competition.name}»? Ігри залишаться, але без ліги.`))) return;
+    if (!(await confirmDialog(t.manage.compDeleteConfirm(competition.name)))) return;
     setSaving(true);
     try {
       await api(`/api/competitions/${competition.id}`, { method: "DELETE" });
       await refresh();
-      toast("Лігу видалено");
+      toast(t.manage.compDeleted);
       onClose();
     } catch (err) {
       toast(errorText(err), "error");
@@ -199,35 +201,35 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
     <Sheet
       open
       onClose={onClose}
-      title={competition ? "Ліга" : "Нова ліга"}
+      title={competition ? t.manage.compTitleEdit : t.manage.compTitleNew}
       footer={
         <div className="flex gap-2">
           {competition && (
             <Button variant="danger" size="lg" onClick={remove} disabled={saving}>
-              Видалити
+              {t.common.delete}
             </Button>
           )}
           <Button variant="primary" size="lg" block onClick={submit} loading={saving}>
-            {competition ? "Зберегти" : "Додати"}
+            {competition ? t.common.save : t.common.add}
           </Button>
         </div>
       }
     >
       <div className="space-y-4 pb-2">
-        <Field label="Назва">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Чемпіонат міста" autoFocus={!competition} />
+        <Field label={t.manage.name}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.manage.namePh} autoFocus={!competition} />
         </Field>
-        <Field label="Тип">
-          <Segmented value={type} onChange={setType} options={COMPETITION_TYPES} />
+        <Field label={t.manage.type}>
+          <Segmented value={type} onChange={setType} options={options(COMPETITION_TYPE_VALUES, t.competitionTypes)} />
         </Field>
-        <Field label="Сезон">
+        <Field label={t.manage.season}>
           <Input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="2026/27" className="w-32" />
         </Field>
-        <Field label="Посилання на таблицю">
+        <Field label={t.manage.standingsUrl}>
           <Input type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
         </Field>
         {competition && (
-          <Toggle checked={archived} onChange={setArchived} label="В архіві" hint="Не показувати при створенні нових ігор" />
+          <Toggle checked={archived} onChange={setArchived} label={t.manage.archived} hint={t.manage.archivedHint} />
         )}
       </div>
     </Sheet>
@@ -235,9 +237,10 @@ function CompetitionForm({ onClose, competition }: { onClose: () => void; compet
 }
 
 function SettingsSection() {
+  const { t } = useApp();
   const { data } = useSettings(true);
   return (
-    <Section title="Налаштування">
+    <Section title={t.manage.settings}>
       {data ? (
         // key — щоб форма перечиталась після збереження на іншому пристрої
         <SettingsForm key={data.updatedAt} initial={data} />
@@ -253,12 +256,14 @@ function SettingsSection() {
 const COMMON_TZ = ["Europe/Kyiv", "Europe/Warsaw", "Europe/Berlin", "Europe/London", "Europe/Lisbon", "America/New_York"];
 
 function SettingsForm({ initial }: { initial: SettingsDTO }) {
+  const { t } = useApp();
   const { mutate } = useSWRConfig();
   const toast = useToast();
   const [teamName, setTeamName] = useState(initial.teamName);
   const [timezone, setTimezone] = useState(initial.timezone);
   const [reminderHours, setReminderHours] = useState(initial.reminderHours);
   const [announceDays, setAnnounceDays] = useState(String(initial.announceDaysBefore));
+  const [language, setLanguage] = useState<Lang>(isLang(initial.language) ? initial.language : "uk");
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -266,11 +271,11 @@ function SettingsForm({ initial }: { initial: SettingsDTO }) {
     try {
       await api("/api/settings", {
         method: "PATCH",
-        body: { teamName, timezone, reminderHours, announceDaysBefore: Number(announceDays) || 0 },
+        body: { teamName, timezone, reminderHours, announceDaysBefore: Number(announceDays) || 0, language },
       });
       await Promise.all([mutate("/api/settings"), mutate("/api/me")]);
       haptic("success");
-      toast("Налаштування збережено");
+      toast(t.manage.settingsSaved);
     } catch (err) {
       toast(errorText(err), "error");
     } finally {
@@ -280,10 +285,10 @@ function SettingsForm({ initial }: { initial: SettingsDTO }) {
 
   return (
     <div className="space-y-4 px-4 py-4">
-      <Field label="Назва команди">
+      <Field label={t.manage.teamName}>
         <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} />
       </Field>
-      <Field label="Часовий пояс" hint="Усі дати в застосунку й повідомленнях бота показуються в цьому поясі.">
+      <Field label={t.manage.timezone} hint={t.manage.timezoneHint}>
         <Input list="tz" value={timezone} onChange={(e) => setTimezone(e.target.value)} autoComplete="off" />
         <datalist id="tz">
           {COMMON_TZ.map((z) => (
@@ -292,10 +297,10 @@ function SettingsForm({ initial }: { initial: SettingsDTO }) {
         </datalist>
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Нагадувати за, год" hint="Через кому">
+        <Field label={t.manage.remindHours} hint={t.manage.remindHoursHint}>
           <Input value={reminderHours} onChange={(e) => setReminderHours(e.target.value)} placeholder="24, 2" />
         </Field>
-        <Field label="Анонс за, днів" hint="0 — не анонсувати самому">
+        <Field label={t.manage.announceDays} hint={t.manage.announceDaysHint}>
           <Input
             inputMode="numeric"
             value={announceDays}
@@ -303,8 +308,11 @@ function SettingsForm({ initial }: { initial: SettingsDTO }) {
           />
         </Field>
       </div>
+      <Field label={t.manage.botLanguage} hint={t.manage.botLanguageHint}>
+        <Segmented value={language} onChange={setLanguage} options={LANGS} />
+      </Field>
       <Button variant="primary" block onClick={save} loading={saving}>
-        Зберегти
+        {t.common.save}
       </Button>
     </div>
   );

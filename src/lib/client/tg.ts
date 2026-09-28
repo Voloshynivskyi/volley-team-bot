@@ -1,7 +1,7 @@
 /** Мінімальна типізація Telegram WebApp SDK — тільки те, що використовуємо. */
 export type TgWebApp = {
   initData: string;
-  initDataUnsafe: { start_param?: string; user?: { id: number; first_name: string } };
+  initDataUnsafe: { start_param?: string; user?: { id: number; first_name: string; language_code?: string } };
   version: string;
   platform: string;
   colorScheme: "light" | "dark";

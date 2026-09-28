@@ -5,7 +5,7 @@ import { useSWRConfig } from "swr";
 import type { RsvpStatus } from "@/db/schema";
 import { api, EVENTS_UPCOMING_KEY, eventKey, type AttendanceDTO, type EventDTO } from "@/lib/client/api";
 import { haptic } from "@/lib/client/tg";
-import { RSVP } from "@/lib/positions";
+import { RSVP_EMOJI, RSVP_VALUES } from "@/lib/positions";
 import { useApp } from "./context";
 import { errorText, Segmented, useToast } from "./ui";
 
@@ -31,7 +31,7 @@ function applyLocal(
 }
 
 export function Rsvp({ event, showCounts = true }: { event: EventDTO; showCounts?: boolean }) {
-  const { me } = useApp();
+  const { me, t } = useApp();
   const toast = useToast();
   const { mutate } = useSWRConfig();
   const [pending, setPending] = useState(false);
@@ -71,14 +71,12 @@ export function Rsvp({ event, showCounts = true }: { event: EventDTO; showCounts
       <Segmented
         value={mine}
         onChange={choose}
-        options={RSVP.map((r) => ({ value: r.value, label: r.label, icon: r.emoji }))}
+        options={RSVP_VALUES.map((s) => ({ value: s, label: t.rsvp[s], icon: RSVP_EMOJI[s] }))}
         tone={{ going: "going", maybe: "maybe", not_going: "not" }}
       />
       {showCounts && (
         <p className="mt-2 px-1 text-[14px] text-hint">
-          {going === 0 && maybe === 0
-            ? "Ніхто ще не відмітився"
-            : `Ідуть ${going}${maybe ? `, можливо ${maybe}` : ""}`}
+          {going === 0 && maybe === 0 ? t.rsvpSummary.nobody : t.rsvpSummary.going(going, maybe)}
         </p>
       )}
     </div>

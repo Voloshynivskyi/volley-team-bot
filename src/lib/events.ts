@@ -64,12 +64,53 @@ export async function linkPlayerByTelegram(u: TelegramUser): Promise<Player | nu
     where: ilike(players.telegramUsername, u.username),
   });
   if (!byName) return null;
+  // Картка вже прив'язана до іншої людини з таким самим username — не чіпаємо.
+  if (byName.telegramUserId != null) return null;
   const [updated] = await db
     .update(players)
     .set({ telegramUserId: u.id, updatedAt: new Date() })
     .where(eq(players.id, byName.id))
     .returning();
+  await mergeAttendanceForPlayer(byName.id, u.id, byName.fullName);
   return updated ?? byName;
+}
+
+/**
+ * Після прив'язки Telegram до картки зводимо явку докупи: рядки, де людина
+ * відмічалась сама (лише telegram id), і рядки, де за неї відмічав адмін
+ * (лише player id), стають одним рядком на подію — лишається свіжіший.
+ * Повертає id подій, чиї повідомлення в треді варто перемалювати.
+ */
+export async function mergeAttendanceForPlayer(
+  playerId: number,
+  telegramUserId: number,
+  displayName: string,
+): Promise<number[]> {
+  const rows = await db.query.attendance.findMany({
+    where: or(eq(attendance.playerId, playerId), eq(attendance.telegramUserId, telegramUserId)),
+  });
+  const byEvent = new Map<number, Attendance[]>();
+  for (const r of rows) byEvent.set(r.eventId, [...(byEvent.get(r.eventId) ?? []), r]);
+
+  for (const list of byEvent.values()) {
+    const [keep, ...rest] = list.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    if (rest.length) await db.delete(attendance).where(inArray(attendance.id, rest.map((r) => r.id)));
+    await db
+      .update(attendance)
+      .set({ playerId, telegramUserId, displayName })
+      .where(eq(attendance.id, keep.id));
+  }
+  return [...byEvent.keys()];
+}
+
+/** Нове ім'я гравця одразу видно у списках явки. Повертає id зачеплених подій. */
+export async function syncAttendanceName(playerId: number, displayName: string): Promise<number[]> {
+  const rows = await db
+    .update(attendance)
+    .set({ displayName })
+    .where(eq(attendance.playerId, playerId))
+    .returning({ eventId: attendance.eventId });
+  return [...new Set(rows.map((r) => r.eventId))];
 }
 
 /**
