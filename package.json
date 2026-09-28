@@ -10,7 +10,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "bot:webhook": "tsx scripts/set-webhook.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "cron:dry": "tsx --tsconfig tsconfig.json scripts/cron-dryrun.ts"
   },
