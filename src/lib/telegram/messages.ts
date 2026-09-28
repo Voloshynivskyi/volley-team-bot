@@ -1,6 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import type { Attendance, Competition, Event, Player, Settings } from "@/db/schema";
 import { dict, fmtRound, isLang, ucFirst, type Dict, type Lang } from "@/lib/i18n";
+import { checkLineup, nonResponders, parseLineupRules, type LineupCheck } from "@/lib/lineup";
 import { positionShort, RSVP_EMOJI, RSVP_VALUES } from "@/lib/positions";
 import { fmtDateTimeLong, fmtDayShort, fmtTime } from "@/lib/time";
 
@@ -9,6 +10,7 @@ export type EventBundle = {
   competition: Competition | null;
   attendance: Attendance[];
   settings: Settings;
+  players: Player[];
 };
 
 /** Мова повідомлень бота в групі (налаштування команди). */
@@ -18,6 +20,12 @@ export function teamLang(s: Settings): Lang {
 
 export function esc(s: string | null | undefined): string {
   return (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Час збору: початок мінус налаштовані хвилини. */
+export function arrivalTime(e: Event, s: Settings): Date | null {
+  if (e.type !== "game" || s.arriveMinutes <= 0) return null;
+  return new Date(e.startsAt.getTime() - s.arriveMinutes * 60_000);
 }
 
 function eventTitle(t: Dict, e: Event): string {
@@ -36,15 +44,38 @@ export function reminderHeader(t: Dict, offsetHours: number): string {
   return `⏰ ${t.bot.inHours(offsetHours)}`;
 }
 
+export function lineupFor(b: EventBundle): LineupCheck {
+  return checkLineup(parseLineupRules(b.settings.lineupRules), b.attendance, b.players);
+}
+
+export function gapsText(t: Dict, check: LineupCheck): string {
+  return check.gaps
+    .map((g) => `${t.positions[g.position].label.toLowerCase()}${g.need > 1 ? ` ×${g.need}` : ""}`)
+    .join(", ");
+}
+
+/** Згадка, що доходить сповіщенням: за id (працює й без username) або @username. */
+function mention(p: Player): string {
+  if (p.telegramUserId != null) return `<a href="tg://user?id=${p.telegramUserId}">${esc(p.fullName)}</a>`;
+  if (p.telegramUsername) return `@${esc(p.telegramUsername)}`;
+  return esc(p.fullName);
+}
+
+export type TextOptions = {
+  header?: string;
+  /** Додати рядок "ще не відповіли" зі згадками — для нагадувань за добу й тривоги. */
+  mentionSilent?: boolean;
+};
+
 /** Повний текст анонсу події (HTML). */
-export function buildEventText(b: EventBundle, lang: Lang, header?: string): string {
+export function buildEventText(b: EventBundle, lang: Lang, opts: TextOptions = {}): string {
   const t = dict(lang);
   const { event: e, competition: c, settings: s } = b;
   const tz = s.timezone;
   const lines: string[] = [];
 
   if (e.status === "cancelled") lines.push(`<b>❌ ${t.bot.cancelled}</b>`);
-  else if (header) lines.push(`<b>${esc(header)}</b>`);
+  else if (opts.header) lines.push(`<b>${esc(opts.header)}</b>`);
 
   lines.push(`<b>${eventIcon(e)} ${esc(eventTitle(t, e))}</b>`);
 
@@ -53,7 +84,9 @@ export function buildEventText(b: EventBundle, lang: Lang, header?: string): str
     if (comp) lines.push(esc(comp));
   }
 
-  lines.push(`📅 ${esc(fmtDateTimeLong(e.startsAt, tz, lang))}`);
+  const arrive = arrivalTime(e, s);
+  const when = fmtDateTimeLong(e.startsAt, tz, lang);
+  lines.push(`📅 ${esc(when)}${arrive ? ` · <b>${esc(t.arriveLower(fmtTime(arrive, tz)))}</b>` : ""}`);
 
   const side = e.type === "game" && e.isHome != null ? (e.isHome ? t.schedule.home : t.schedule.away) : null;
   if (e.venueName || e.venueAddress) {
@@ -73,7 +106,23 @@ export function buildEventText(b: EventBundle, lang: Lang, header?: string): str
     return lines.join("\n");
   }
 
-  if (e.status === "scheduled") lines.push("", ...attendanceLines(t, b.attendance));
+  if (e.status !== "scheduled") return lines.join("\n");
+
+  lines.push("", ...attendanceLines(t, b.attendance));
+
+  if (e.type === "game") {
+    const check = lineupFor(b);
+    if (check.ok) lines.push(t.botExtra.lineupOk(check.going));
+    else {
+      lines.push(t.botExtra.lineupShort(check.going, check.minPlayers));
+      if (check.gaps.length) lines.push(esc(t.botExtra.lineupGaps(gapsText(t, check))));
+    }
+  }
+
+  if (opts.mentionSilent) {
+    const silent = nonResponders(b.attendance, b.players);
+    if (silent.length) lines.push("", t.botExtra.nonResponders(silent.map(mention).join(", ")));
+  }
   return lines.join("\n");
 }
 
@@ -98,8 +147,23 @@ export function rsvpKeyboard(lang: Lang, eventId: number, appLink?: string): Inl
   return kb;
 }
 
-/** Компактний рядок для /schedule */
-export function scheduleLine(lang: Lang, e: Event, c: Competition | null, tz: string): string {
+/** Кнопки рахунку. У регулярці ALG і OMW завжди рівно 3 сети. */
+export function scoreKeyboard(lang: Lang, eventId: number, appLink?: string): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const [us, them] of [
+    [3, 0],
+    [2, 1],
+    [1, 2],
+    [0, 3],
+  ]) {
+    kb.text(`${us}:${them}`, `score:${eventId}:${us}:${them}`);
+  }
+  if (appLink) kb.row().url(dict(lang).botExtra.otherScore, appLink);
+  return kb;
+}
+
+/** Компактний рядок для /schedule і дайджесту. */
+export function scheduleLine(lang: Lang, e: Event, c: Competition | null, tz: string, lineup?: LineupCheck): string {
   const t = dict(lang);
   const when = `${fmtDayShort(e.startsAt, tz, lang)}, ${fmtTime(e.startsAt, tz)}`;
   if (e.type === "training") {
@@ -107,9 +171,10 @@ export function scheduleLine(lang: Lang, e: Event, c: Competition | null, tz: st
   }
   const opp = e.opponent ? esc(e.opponent) : t.bot.opponentTbd;
   const side = e.isHome == null ? "" : ` (${e.isHome ? t.schedule.home : t.schedule.away})`;
-  const comp = c ? ` — ${esc(c.name)}` : "";
+  const comp = c ? ` — ${esc(c.shortName ?? c.name)}` : "";
   const cancelled = e.status === "cancelled" ? ` ❌ ${t.bot.cancelledLower}` : "";
-  return `🏐 <b>${esc(when)}</b> — ${opp}${side}${comp}${cancelled}`;
+  const squad = lineup && e.status === "scheduled" ? ` · ${lineup.ok ? "✅" : "⚠️"} ${lineup.going}/${lineup.minPlayers}` : "";
+  return `🏐 <b>${esc(when)}</b> — ${opp}${side}${comp}${cancelled}${squad}`;
 }
 
 export function rosterText(lang: Lang, players: Player[], teamName: string): string {

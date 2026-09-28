@@ -50,6 +50,13 @@ async function main() {
   }
   await setCommands(api);
 
+  // Постійна кнопка біля поля вводу в особистому чаті з ботом — відкриває застосунок.
+  if (appUrl) {
+    await api.setChatMenuButton({
+      menu_button: { type: "web_app", text: dict("uk").tabs.schedule, web_app: { url: appUrl } },
+    });
+  }
+
   const info = await api.getWebhookInfo();
   const me = await api.getMe();
   console.log(`@${me.username}: webhook → ${info.url}; commands set for uk/ru/en`);

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { handle, json, parseBody } from "@/lib/api";
+import { actorOf, audit } from "@/lib/audit";
 import { HttpError, requireMember, requireViewer } from "@/lib/auth";
 import { listPlayers, mergeAttendanceForPlayer } from "@/lib/events";
 import { refreshEventPosts } from "@/lib/telegram/post";
@@ -33,6 +34,7 @@ export const POST = handle(async (req) => {
     })
     .returning();
 
+  await audit("player", row.id, "create", actorOf(viewer.user), null, row);
   if (linkMe) {
     const touched = await mergeAttendanceForPlayer(row.id, viewer.user.id, row.fullName);
     await Promise.all(touched.map((id) => refreshEventPosts(id)));

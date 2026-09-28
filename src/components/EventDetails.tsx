@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { useSWRConfig } from "swr";
-import { api, isEventsKey, useEvent, type EventDTO } from "@/lib/client/api";
+import { api, copyText, isEventsKey, STANDINGS_KEY, useEvent, usePlayers, type EventDTO } from "@/lib/client/api";
 import { confirmDialog, haptic, openLink } from "@/lib/client/tg";
 import { fmtRound, ucFirst } from "@/lib/i18n";
 import { RSVP_VALUES } from "@/lib/positions";
 import { fmtDayLong, fmtTime } from "@/lib/time";
 import { useApp } from "./context";
 import EventForm from "./EventForm";
+import { LineupCard, useLineup } from "./Lineup";
 import { isMine, Rsvp } from "./Rsvp";
 import RosterAttendance from "./RosterAttendance";
-import { Button, errorText, Input, Sheet, Spinner, useToast } from "./ui";
+import { Button, errorText, Input, Sheet, Spinner, Textarea, useToast } from "./ui";
 
 export default function EventDetails({ id, onClose }: { id: number | null; onClose: () => void }) {
   const { isAdmin, me, t } = useApp();
@@ -21,8 +22,9 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
   const [editOpen, setEditOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const lineup = useLineup(e);
 
-  const refresh = () => mutate(isEventsKey);
+  const refresh = () => Promise.all([mutate(isEventsKey), mutate(STANDINGS_KEY)]);
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label);
@@ -91,10 +93,15 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
                 {e.scoreUs}:{e.scoreThem}
               </p>
               <p className="mt-1 text-[15px] text-hint">{e.scoreUs > e.scoreThem ? t.event.win : t.event.loss}</p>
+              {e.mvp?.closed && e.mvp.names.length > 0 && (
+                <p className="mt-2 text-[15px] font-medium">🏅 {t.mvp.matchMvp(e.mvp.names.join(", "))}</p>
+              )}
             </div>
           )}
 
           <InfoList event={e} />
+
+          {e.status === "scheduled" && lineup && <LineupCard check={lineup} />}
 
           {e.status === "scheduled" && (
             <div className="rounded-2xl bg-surface p-4">
@@ -104,6 +111,8 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
           )}
 
           {isAdmin && e.status === "scheduled" && <RosterAttendance event={e} />}
+
+          {e.type === "game" && e.status !== "cancelled" && <ProtocolButton event={e} />}
 
           {isAdmin && (
             <div className="space-y-2">
@@ -156,13 +165,19 @@ export default function EventDetails({ id, onClose }: { id: number | null; onClo
 }
 
 function DateBlock({ event: e }: { event: EventDTO }) {
-  const { tz, lang } = useApp();
+  const { tz, lang, t, me } = useApp();
   const d = new Date(e.startsAt);
+  const arrive =
+    e.type === "game" && me.settings.arriveMinutes > 0 ? new Date(d.getTime() - me.settings.arriveMinutes * 60_000) : null;
   return (
     <div className="flex items-end justify-between gap-4 rounded-2xl bg-surface px-4 py-3">
       <div>
         <p className="text-[17px] font-medium">{ucFirst(fmtDayLong(d, tz, lang))}</p>
-        <p className="text-[14px] text-hint">{d.getFullYear()}</p>
+        {arrive ? (
+          <p className="text-[15px] font-medium text-court">{t.arrive(fmtTime(arrive, tz))}</p>
+        ) : (
+          <p className="text-[14px] text-hint">{d.getFullYear()}</p>
+        )}
       </div>
       <p className="numeral text-[44px]">{fmtTime(d, tz)}</p>
     </div>
@@ -294,5 +309,51 @@ function ResultForm({ event: e, onDone }: { event: EventDTO; onDone: () => Promi
         {t.event.saveScore}
       </Button>
     </div>
+  );
+}
+
+/** Імена й номери тих, хто йде, — щоб капітан швидко переписав їх у протокол. */
+function ProtocolButton({ event: e }: { event: EventDTO }) {
+  const { t, me, tz, lang } = useApp();
+  const { data: players } = usePlayers();
+  const toast = useToast();
+  const [manual, setManual] = useState<string | null>(null);
+
+  function buildText(): string | null {
+    const going = e.attendance.filter((a) => a.status === "going");
+    if (!going.length) return null;
+    const byId = new Map((players ?? []).map((p) => [p.id, p]));
+    const lines = going
+      .map((a) => {
+        const p = a.playerId != null ? byId.get(a.playerId) : undefined;
+        return { num: p?.number ?? null, name: p?.fullName ?? a.displayName };
+      })
+      .sort((x, y) => (x.num ?? 999) - (y.num ?? 999) || x.name.localeCompare(y.name))
+      .map((x) => `${x.num != null ? String(x.num).padStart(2, " ") : "  "}  ${x.name}`);
+    const head = `${me.settings.teamName} — ${e.opponent ?? ""}, ${fmtDayLong(new Date(e.startsAt), tz, lang)}`;
+    return [head, "", ...lines].join("\n");
+  }
+
+  async function copy() {
+    const text = buildText();
+    if (!text) {
+      toast(t.protocol.empty, "error");
+      return;
+    }
+    if (await copyText(text)) {
+      haptic("success");
+      toast(t.protocol.copied);
+    } else setManual(text);
+  }
+
+  return (
+    <>
+      <Button block onClick={copy}>
+        📋 {t.protocol.button}
+      </Button>
+      <Sheet open={manual != null} onClose={() => setManual(null)} title={t.protocol.manualTitle}>
+        <Textarea readOnly rows={12} value={manual ?? ""} onFocus={(ev) => ev.currentTarget.select()} className="font-mono text-[14px]" />
+      </Sheet>
+    </>
   );
 }

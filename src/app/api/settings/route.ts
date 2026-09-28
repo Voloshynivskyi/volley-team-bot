@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, getSettings, schema } from "@/db";
 import { handle, json, parseBody } from "@/lib/api";
+import { actorOf, audit } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { settingsInput } from "@/lib/validation";
 
@@ -12,25 +13,31 @@ export const GET = handle(async (req) => {
 });
 
 export const PATCH = handle(async (req) => {
-  await requireAdmin(req);
-  const input = await parseBody(req, settingsInput.partial());
-  await getSettings();
+  const viewer = await requireAdmin(req);
+  const { lineupRules, ...input } = await parseBody(req, settingsInput.partial());
+  const before = await getSettings();
   const [row] = await db
     .update(schema.settings)
-    .set({ ...input, updatedAt: new Date() })
+    .set({
+      ...input,
+      ...(lineupRules ? { lineupRules: JSON.stringify(lineupRules) } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(schema.settings.id, 1))
     .returning();
+  await audit("settings", 1, "update", actorOf(viewer.user), before, row);
   return json(row);
 });
 
 /** Відв'язати групу. */
 export const DELETE = handle(async (req) => {
-  await requireAdmin(req);
-  await getSettings();
+  const viewer = await requireAdmin(req);
+  const before = await getSettings();
   const [row] = await db
     .update(schema.settings)
     .set({ chatId: null, threadId: null, chatTitle: null, updatedAt: new Date() })
     .where(eq(schema.settings.id, 1))
     .returning();
+  await audit("settings", 1, "update", actorOf(viewer.user), before, row);
   return json(row);
 });

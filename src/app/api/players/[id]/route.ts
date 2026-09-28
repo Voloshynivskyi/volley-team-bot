@@ -2,6 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { db, schema } from "@/db";
 import { handle, idParam, json, parseBody } from "@/lib/api";
+import { actorOf, audit } from "@/lib/audit";
 import { HttpError, requireAdmin, requireMember } from "@/lib/auth";
 import { mergeAttendanceForPlayer, syncAttendanceName } from "@/lib/events";
 import { refreshEventPosts } from "@/lib/telegram/post";
@@ -34,6 +35,7 @@ export const PATCH = handle<Ctx>(async (req: NextRequest, ctx) => {
   }
 
   const [row] = await db.update(players).set(patch).where(eq(players.id, id)).returning();
+  await audit("player", id, patch.telegramUserId != null ? "link" : "update", actorOf(viewer.user), current, row);
 
   // Явку й повідомлення в треді оновлюємо, лише якщо змінилось те, що в них видно.
   const touched = new Set<number>();
@@ -49,9 +51,10 @@ export const PATCH = handle<Ctx>(async (req: NextRequest, ctx) => {
 });
 
 export const DELETE = handle<Ctx>(async (req: NextRequest, ctx) => {
-  await requireAdmin(req);
+  const viewer = await requireAdmin(req);
   const id = idParam((await ctx.params).id);
   const [row] = await db.delete(players).where(eq(players.id, id)).returning();
   if (!row) throw new HttpError(404, "playerNotFound");
+  await audit("player", id, "delete", actorOf(viewer.user), row, null);
   return json({ ok: true });
 });

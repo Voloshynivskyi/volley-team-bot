@@ -1,5 +1,6 @@
 import { db, getSettings, schema } from "@/db";
 import { handle, json, parseBody } from "@/lib/api";
+import { actorOf, audit } from "@/lib/audit";
 import { requireAdmin, requireViewer } from "@/lib/auth";
 import { getEventRow, listEvents } from "@/lib/events";
 import { sendEventPost } from "@/lib/telegram/post";
@@ -15,7 +16,7 @@ export const GET = handle(async (req) => {
 });
 
 export const POST = handle(async (req) => {
-  await requireAdmin(req);
+  const viewer = await requireAdmin(req);
   const { startsAtLocal, announceNow, ...rest } = await parseBody(req, eventInput);
   const settings = await getSettings();
   const values = {
@@ -25,6 +26,7 @@ export const POST = handle(async (req) => {
     ...(rest.type === "training" ? { opponent: null, competitionId: null, isHome: null, round: null } : {}),
   };
   const [created] = await db.insert(schema.events).values(values).returning();
+  await audit("event", created.id, "create", actorOf(viewer.user), null, created);
 
   let announced: string | null = null;
   if (announceNow) announced = await sendEventPost(created.id, "announce");

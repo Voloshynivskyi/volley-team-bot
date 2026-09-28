@@ -269,6 +269,23 @@ export const uk = {
     announceDaysBefore: "Анонс за",
     scoreUs: "Рахунок",
     scoreThem: "Рахунок",
+    position: "Позиція",
+    status: "Статус",
+    telegramUserId: "Telegram",
+    startsAt: "Дата й час",
+    competitionId: "Ліга",
+    type: "Тип",
+    isHome: "Дома чи виїзд",
+    arriveMinutes: "Збір до гри",
+    lineupRules: "Склад на гру",
+    language: "Мова",
+    shortName: "Коротка назва",
+    ourName: "Назва в лізі",
+    playoffSpots: "Місць у плей-оф",
+    isArchived: "Архів",
+    setsHome: "Рахунок",
+    setsAway: "Рахунок",
+    walkover: "Walkover",
   } as Record<string, string>,
 
   announceResult: {
@@ -304,6 +321,158 @@ export const uk = {
     cancelledLower: "скасовано",
     rosterEmpty: "Склад ще порожній. Додайте гравців у застосунку.",
     injuredGroup: "Травмовані",
+  },
+
+  arrive: (time: string) => `Збір о ${time}`,
+  arriveLower: (time: string) => `збір о ${time}`,
+  pointsWord: (n: number) => pluralSlavic(n, ["очко", "очки", "очок"]),
+  ordinalPlace: (n: number) => `${n} місце`,
+  ago: (minutes: number) => {
+    if (minutes < 1) return "щойно";
+    if (minutes < 60) return `${minutes} хв тому`;
+    const h = Math.floor(minutes / 60);
+    if (h < 24) return `${h} год тому`;
+    return `${Math.floor(h / 24)} дн. тому`;
+  },
+
+  lineup: {
+    title: "Склад на гру",
+    goingOf: (g: number, m: number) => `${g} з ${m}`,
+    ok: "Склад зібрано",
+    short: "Бракує гравців",
+    missing: (n: number) => `ще ${n} ${pluralSlavic(n, ["гравець", "гравці", "гравців"])}`,
+    gaps: "Бракує",
+    tooMany: (max: number) => `Більше ${max} — у протокол увійдуть лише ${max}`,
+    universalsCover: (n: number) => `Універсали закривають ${n}`,
+    noAnswer: "без відповіді",
+  },
+
+  protocol: {
+    button: "Склад для протоколу",
+    copied: "Скопійовано — вставте в протокол",
+    manualTitle: "Скопіюйте вручну",
+    empty: "Ще ніхто не йде",
+  },
+
+  calendar: {
+    row: "Додати в календар",
+    title: "Календар",
+    text: "Усі ігри й тренування з'являться у вашому календарі й оновлюватимуться самі.",
+    google: "Google Календар",
+    apple: "Apple Календар та інші",
+    copy: "Скопіювати посилання",
+    copied: "Посилання скопійовано",
+    appleHint: "Якщо календар не відкрився сам — скопіюйте посилання й додайте його як підписку.",
+  },
+
+  onboarding: {
+    title: "Хто ви?",
+    text: "Оберіть себе в складі — тоді ваші відповіді «Іду» рахуватимуться за вами.",
+    notInList: "Мене немає в списку",
+    later: "Пізніше",
+    confirm: (name: string) => `Це ви — ${name}?`,
+    done: (name: string) => `Готово, ви — ${name}`,
+    empty: "Вільних карток немає — додайте себе.",
+  },
+
+  table: {
+    title: "Таблиця",
+    none: "Поки немає ліг з таблицею.",
+    noneAdmin: "Вкажіть у лізі посилання на таблицю сайту OMW або імпортуйте матчі ліги.",
+    clinched: "Плей-оф гарантовано 🎉",
+    eliminated: "Цього сезону плей-оф уже не наздогнати",
+    inZone: (gap: number, spots: number) =>
+      `У зоні плей-оф (топ-${spots}), відрив ${gap} ${pluralSlavic(gap, ["очко", "очки", "очок"])}`,
+    outZone: (gap: number, spots: number) =>
+      `Поза зоною плей-оф: до ${spots}-го місця ${gap} ${pluralSlavic(gap, ["очко", "очки", "очок"])}`,
+    semifinal: (opp: string) => `Якби сезон закінчився зараз — півфінал з ${opp}`,
+    remaining: (n: number) => `Лишилось ${n} ${pluralSlavic(n, ["гра", "гри", "ігор"])}`,
+    record: (w: number, l: number, sf: number, sa: number) => `Перемог ${w}, поразок ${l}, сети ${sf}:${sa}`,
+    colTeam: "Команда",
+    colPlayed: "І",
+    colWL: "В–П",
+    colSets: "Сети",
+    colPts: "О",
+    zone: (spots: number) => `Плей-оф: топ-${spots}`,
+    external: "Дані з сайту ліги, оновлюються раз на пів години.",
+    externalNoPlayoff: "Формат фіналу визначає організатор, тож прогнозу плей-оф тут немає.",
+    externalFailed: "Сайт ліги зараз не відповідає. Спробуйте пізніше.",
+    matches: "Матчі ліги",
+    postponed: "перенесено",
+    enterResult: "Результат матчу",
+    forfeit: (team: string) => `Walkover: не з'явились ${team}`,
+    clear: "Прибрати результат",
+    resultSaved: "Результат збережено",
+    ourMatch: "Це наш матч — рахунок записується в картці гри.",
+    noResults: "Результатів ще немає — таблиця з’явиться після першого туру.",
+    adminHint: "Результати чужих матчів вносять адміни — таблиця й статус плей-оф порахуються самі.",
+  },
+
+  mvp: {
+    title: "MVP сезону",
+    empty: "Голосувань ще не було.",
+    matchMvp: (names: string) => `MVP: ${names}`,
+  },
+
+  audit: {
+    title: "Журнал змін",
+    empty: "Поки порожньо.",
+    lastChange: (who: string, when: string) => `Остання зміна: ${who}, ${when}`,
+    actions: {
+      create: "Створено",
+      update: "Змінено",
+      delete: "Видалено",
+      link: "Прив’язано до Telegram",
+      result: "Рахунок",
+    } as Record<string, string>,
+    entities: {
+      player: "Гравець",
+      event: "Подія",
+      competition: "Ліга",
+      settings: "Налаштування",
+      match: "Матч ліги",
+    } as Record<string, string>,
+  },
+
+  manageExtra: {
+    arriveMinutes: "Збір до гри, хв",
+    arriveHint: "Час збору показується в анонсах, застосунку й календарі.",
+    lineupTitle: "Склад на гру",
+    lineupHint: "Мінімум–максимум на позицію. Універсал закриває будь-яку діру.",
+    minPlayers: "Мінімум гравців",
+    maxPlayers: "Максимум у протоколі",
+    shortName: "Коротка назва",
+    shortNamePh: "ALG",
+    ourName: "Як ми записані в лізі",
+    ourNamePh: "REDMOON",
+    playoffSpots: "Місць у плей-оф",
+  },
+
+  botExtra: {
+    lineupOk: (n: number) => `👍 Склад зібрано (${n})`,
+    lineupShort: (g: number, m: number) => `⚠️ Склад: ${g} з ${m}`,
+    lineupGaps: (list: string) => `Бракує: ${list}`,
+    nonResponders: (list: string) => `❔ Ще не відповіли: ${list}`,
+    shortageHeader: "🚨 Бракує гравців",
+    resultPrompt: (opp: string) => `🏐 Як зіграли з ${opp}?`,
+    resultPromptHint: "Рахунок записує адмін.",
+    otherScore: "Інший рахунок",
+    resultLine: (won: boolean, us: number, them: number, opp: string) =>
+      `${won ? "🏆 Перемога" : "Поразка"} ${us}:${them} — ${opp}`,
+    recordedBy: (name: string) => `Записав(ла): ${name}`,
+    adminsOnlyScore: "Рахунок записують адміни групи.",
+    scoreSaved: "Рахунок записано",
+    mvpPrompt: (opp: string) => `🏅 Хто MVP матчу з ${opp}?`,
+    mvpVotes: (n: number) => `Проголосувало: ${n}. Підсумок — завтра.`,
+    mvpVoted: (name: string) => `Голос за ${name} зараховано`,
+    mvpSelf: "За себе голосувати не можна 🙂",
+    mvpClosed: "Голосування вже завершено.",
+    mvpWinner: (opp: string, names: string, votes: number) =>
+      `🏅 MVP матчу з ${opp}: ${names} — ${votes} ${pluralSlavic(votes, ["голос", "голоси", "голосів"])}`,
+    mvpNoVotes: (opp: string) => `🏅 MVP матчу з ${opp}: ніхто не проголосував.`,
+    digestTitle: "🗓 Цього тижня",
+    backupCaption: (date: string) => `Резервна копія бази за ${date}`,
+    errorAlert: (where: string, msg: string) => `⚠️ Збій у боті (${where}): ${msg}`,
   },
 
   commands: {

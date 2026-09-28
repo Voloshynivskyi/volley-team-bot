@@ -7,11 +7,13 @@ import { AppCtx, type AppCtxValue } from "./context";
 import EventDetails from "./EventDetails";
 import { LangProvider, LangSwitch, useT } from "./i18n";
 import Manage from "./Manage";
+import Onboarding from "./Onboarding";
 import Roster from "./Roster";
 import Schedule from "./Schedule";
+import Standings from "./Standings";
 import { Button, Spinner, ToastProvider } from "./ui";
 
-type Tab = "schedule" | "roster" | "manage";
+type Tab = "schedule" | "table" | "roster" | "manage";
 
 export default function App() {
   const { data: me, error, mutate } = useMe();
@@ -90,11 +92,13 @@ function AppBody({ me, error, retry }: { me?: Me; error?: ApiError; retry: () =>
           style={{ paddingTop: "var(--safe-top)", paddingBottom: "calc(var(--safe-bottom) + 8.5rem)" }}
         >
           {tab === "schedule" && <Schedule />}
+          {tab === "table" && <Standings />}
           {tab === "roster" && <Roster />}
           {tab === "manage" && ctx.isAdmin && <Manage />}
         </div>
         <TabBar tab={tab} setTab={setTab} isAdmin={ctx.isAdmin} />
         <EventDetails id={shownId} onClose={closeEvent} />
+        <Onboarding />
       </AppCtx.Provider>
     </ToastProvider>
   );
@@ -117,6 +121,7 @@ function TabBar({ tab, setTab, isAdmin }: { tab: Tab; setTab: (t: Tab) => void; 
   const { t } = useT();
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "schedule", label: t.tabs.schedule, icon: <CalendarIcon /> },
+    { id: "table", label: t.table.title, icon: <TrophyIcon /> },
     { id: "roster", label: t.tabs.roster, icon: <PeopleIcon /> },
   ];
   if (isAdmin) tabs.push({ id: "manage", label: t.tabs.manage, icon: <SlidersIcon /> });
@@ -155,6 +160,15 @@ function CalendarIcon() {
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
       <rect x="3.5" y="5" width="17" height="15.5" rx="3" />
       <path d="M3.5 10h17M8 3v4M16 3v4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function TrophyIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" strokeLinejoin="round" />
+      <path d="M7 6H4.5v1.5A3 3 0 0 0 7.5 10.5M17 6h2.5v1.5a3 3 0 0 1-3 3" strokeLinecap="round" />
+      <path d="M12 14v3.5M8.5 20.5h7M9.5 17.5h5v3h-5z" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
