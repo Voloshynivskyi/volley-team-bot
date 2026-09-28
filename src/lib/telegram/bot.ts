@@ -13,7 +13,7 @@ import { applyResult } from "@/lib/results";
 import { miniAppLink } from "./api";
 import { invalidateAdminCache, resolveRole } from "./admins";
 import { buildEventText, esc, rosterText, rsvpKeyboard, scheduleLine, teamLang } from "./messages";
-import { refreshEventPosts } from "./post";
+import { refreshEventPosts, sendAppCard } from "./post";
 
 export const bot = new Bot(env.BOT_TOKEN);
 
@@ -79,6 +79,25 @@ bot.command("here", async (ctx) => {
     });
   invalidateAdminCache();
   await ctx.reply(threadId ? t.bot.hereDoneThread : t.bot.hereDoneGroup);
+  await sendAppCard(ctx.chat.id, threadId);
+});
+
+/** Закріпити в поточному треді повідомлення з кнопкою "Відкрити розклад". */
+bot.command("app", async (ctx) => {
+  const t = dict(await chatLang(ctx));
+  if (ctx.chat.type === "private") {
+    await ctx.reply(t.bot.intro(esc((await getSettings()).teamName)), {
+      ...HTML,
+      reply_markup: await openAppKeyboard(ctx, t.bot.openApp),
+    });
+    return;
+  }
+  if (!(await isGroupAdmin(ctx))) {
+    await ctx.reply(t.bot.appAdminOnly);
+    return;
+  }
+  const threadId = ctx.msg.is_topic_message ? (ctx.msg.message_thread_id ?? null) : null;
+  await sendAppCard(ctx.chat.id, threadId);
 });
 
 bot.command("next", async (ctx) => {

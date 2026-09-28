@@ -18,6 +18,7 @@ async function setCommands(api: Api) {
       { command: "schedule", description: c.schedule },
       { command: "roster", description: c.roster },
       { command: "here", description: c.here },
+      { command: "app", description: c.app },
       { command: "start", description: c.start },
     ];
   };
