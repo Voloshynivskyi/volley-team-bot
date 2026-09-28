@@ -320,6 +320,10 @@ export const en: Dict = {
     cancelledLower: "cancelled",
     rosterEmpty: "The roster is empty. Add players in the app.",
     injuredGroup: "Injured",
+    appCard: (team: string) => `📅 <b>${team}</b>
+Schedule, roster, table and “In” answers — in the app.`,
+    appButton: "📅 Open schedule",
+    appAdminOnly: "Only a group admin can pin the schedule button.",
   },
 
   arrive: (time: string) => `Meet at ${time}`,
@@ -483,5 +487,6 @@ export const en: Dict = {
     roster: "Team roster",
     here: "Link this thread for announcements (admin)",
     start: "Open the app",
+    app: "Pin the schedule button in this thread (admin)",
   },
 };

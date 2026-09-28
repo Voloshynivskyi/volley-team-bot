@@ -136,6 +136,28 @@ export async function refreshEventPosts(eventId: number): Promise<Post[]> {
   return list;
 }
 
+/**
+ * Закріплене повідомлення з кнопкою застосунку. Кнопка меню бота в групах не показується —
+ * це єдиний спосіб мати "Розклад" під рукою прямо в треді.
+ */
+export async function sendAppCard(chatId: number, threadId: number | null): Promise<boolean> {
+  const s = await getSettings();
+  const t = dict(teamLang(s));
+  const link = await miniAppLink();
+  if (!link) return false;
+  const msg = await api.sendMessage(chatId, t.bot.appCard(esc(s.teamName)), {
+    message_thread_id: threadId ?? undefined,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: t.bot.appButton, url: link }]] },
+  });
+  try {
+    await api.pinChatMessage(chatId, msg.message_id, { disable_notification: true });
+  } catch (err) {
+    console.warn("pin app card failed", err);
+  }
+  return true;
+}
+
 /** "Як зіграли?" з кнопками рахунку — через 2 години після початку гри. */
 async function sendResultPrompt(eventId: number): Promise<boolean> {
   const s = await getSettings();
