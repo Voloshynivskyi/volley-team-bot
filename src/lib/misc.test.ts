@@ -8,11 +8,24 @@ describe("cron rules", () => {
   it("parses reminder hours", () => {
     expect(parseReminderHours("24, 2, x, 24, 0")).toEqual([24, 2]);
   });
-  it("sends each reminder only inside its one-hour window", () => {
+  it("sends each reminder only inside its 1.5-hour window", () => {
     expect(dueReminders(23.5, [24, 2])).toEqual([24]);
-    expect(dueReminders(22.9, [24, 2])).toEqual([]);
+    expect(dueReminders(22.6, [24, 2])).toEqual([24]);
+    expect(dueReminders(22.4, [24, 2])).toEqual([]);
     expect(dueReminders(1.5, [24, 2])).toEqual([2]);
     expect(dueReminders(0.4, [1])).toEqual([1]);
+  });
+
+  it("an hourly cron never misses a reminder, whatever the start minute", () => {
+    for (let startMinute = 0; startMinute < 60; startMinute += 5) {
+      for (const h of [24, 2, 1]) {
+        // Запуски крона щогодини о :00 плюс кілька секунд затримки.
+        const hits = Array.from({ length: 48 }, (_, k) => k + 0.002 - startMinute / 60)
+          .map((runAt) => h + 1 - runAt)
+          .filter((left) => dueReminders(left, [h]).length > 0);
+        expect(hits.length, `h=${h} start=:${startMinute}`).toBeGreaterThan(0);
+      }
+    }
   });
   it("shortage alert between 48 and 24 hours", () => {
     expect(shortageDue(47)).toBe(true);
